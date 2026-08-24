@@ -60,6 +60,8 @@ class GenerationRequest:
     locale: str
     max_tokens: int = 512
     temperature: float = 0.7
+    top_p: float = 0.95
+    timeout_sec: float = 30.0
 
 
 @dataclass(frozen=True)
@@ -123,3 +125,149 @@ class UnconfiguredModelGateway(ModelGateway):
         from glow_api.errors import ProviderNotConfiguredError
         raise ProviderNotConfiguredError("model_gateway")
         yield  # make this a generator (unreachable but required by type)
+
+
+class OpenWeightsModelGateway(ModelGateway):
+    """
+    Model gateway implementation for a locally hosted, open-weights LLM.
+    By default, it expects a vLLM instance serving an OpenAI-compatible API
+    at `http://localhost:8000/v1`. 
+
+    Strictly enforces the user's data processing policy by never sending
+    sensitive session data to third-party endpoints.
+    """
+
+    def __init__(self) -> None:
+        from glow_api.settings import settings
+        self.api_base = settings.llm_api_base
+        self.api_key = settings.llm_api_key
+        self.model_id = settings.llm_model_id
+
+    @property
+    def is_configured(self) -> bool:
+        return bool(self.api_base)
+
+    async def generate(self, request: GenerationRequest) -> GenerationResponse:
+        import httpx
+        import time
+        from glow_api.errors import ProviderNotConfiguredError
+
+        if not self.is_configured:
+            raise ProviderNotConfiguredError("model_gateway")
+
+        # Assemble OpenAI-compatible messages array
+        messages = [{"role": "system", "content": request.system_prompt}]
+        for role, text in request.conversation_history:
+            messages.append({"role": role, "content": text})
+        messages.append({"role": "user", "content": request.user_message})
+
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+            
+        payload = {
+            "model": self.model_id,
+            "messages": messages,
+            "max_tokens": request.max_tokens,
+            "temperature": request.temperature,
+            "top_p": request.top_p,
+            "stream": False
+        }
+
+        url = self.api_base.rstrip("/") + "/chat/completions"
+        start_time = time.perf_counter()
+        
+        async with httpx.AsyncClient(timeout=request.timeout_sec) as client:
+            try:
+                resp = await client.post(url, headers=headers, json=payload)
+                resp.raise_for_status()
+                data = resp.json()
+            except httpx.HTTPError as e:
+                raise RuntimeError(f"Model provider request failed: {e}") from e
+
+        latency_ms = (time.perf_counter() - start_time) * 1000.0
+
+        choices = data.get("choices", [])
+        if not choices:
+            raise RuntimeError("No choices returned by model provider.")
+            
+        message = choices[0].get("message", {})
+        text = message.get("content", "")
+        
+        finish_reason = choices[0].get("finish_reason", "unknown")
+        if finish_reason == "stop":
+            stop_reason = GenerationStopReason.STOP_TOKEN
+        elif finish_reason == "length":
+            stop_reason = GenerationStopReason.MAX_TOKENS
+        else:
+            stop_reason = GenerationStopReason.ERROR
+
+        usage = data.get("usage", {})
+        token_count = usage.get("total_tokens", 0)
+
+        return GenerationResponse(
+            text=text,
+            stop_reason=stop_reason,
+            model_id=data.get("model", self.model_id),
+            latency_ms=latency_ms,
+            token_count=token_count
+        )
+
+    async def stream(self, request: GenerationRequest) -> AsyncIterator[str]:
+        import httpx
+        import json
+        from glow_api.errors import ProviderNotConfiguredError
+
+        if not self.is_configured:
+            raise ProviderNotConfiguredError("model_gateway")
+
+        messages = [{"role": "system", "content": request.system_prompt}]
+        for role, text in request.conversation_history:
+            messages.append({"role": role, "content": text})
+        messages.append({"role": "user", "content": request.user_message})
+
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+            
+        payload = {
+            "model": self.model_id,
+            "messages": messages,
+            "max_tokens": request.max_tokens,
+            "temperature": request.temperature,
+            "top_p": request.top_p,
+            "stream": True
+        }
+
+        url = self.api_base.rstrip("/") + "/chat/completions"
+
+        try:
+            async with httpx.AsyncClient(timeout=request.timeout_sec) as client:
+                async with client.stream("POST", url, headers=headers, json=payload) as resp:
+                    resp.raise_for_status()
+                    async for line in resp.aiter_lines():
+                        if line.startswith("data: "):
+                            data_str = line[6:]
+                            if data_str.strip() == "[DONE]":
+                                break
+                            try:
+                                chunk = json.loads(data_str)
+                                choices = chunk.get("choices", [])
+                                if choices:
+                                    delta = choices[0].get("delta", {})
+                                    content = delta.get("content")
+                                    if content:
+                                        yield content
+                            except json.JSONDecodeError:
+                                pass
+        except httpx.HTTPError as e:
+            raise RuntimeError(f"Model provider stream request failed: {e}") from e
+
+# Global active gateway
+def get_model_gateway() -> ModelGateway:
+    from glow_api.settings import settings
+    if settings.llm_api_base:
+        return OpenWeightsModelGateway()
+    return UnconfiguredModelGateway()
+
+model_gateway = get_model_gateway()

@@ -284,3 +284,20 @@ class UnconfiguredAvatarGateway(AvatarGateway):
 
     async def get_available_avatars(self) -> list[str]:
         return []  # No avatars available; fall back to text-only mode
+
+# ---------------------------------------------------------------------------
+# Global Gateways
+# ---------------------------------------------------------------------------
+
+from glow_api.settings import settings
+
+def get_avatar_gateway() -> AvatarGateway:
+    """
+    Returns the configured AvatarGateway.
+    """
+    if settings.nvidia_api_key:
+        from glow_api.audio2face import NvidiaA2FGateway
+        return NvidiaA2FGateway()
+    return UnconfiguredAvatarGateway()
+
+avatar_gateway = get_avatar_gateway()

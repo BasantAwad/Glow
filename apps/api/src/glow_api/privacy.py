@@ -333,3 +333,149 @@ def data_store_for_purpose(purpose: ConsentPurpose) -> DataStore:
         ConsentPurpose.RESEARCH_AND_MODEL_IMPROVEMENT: DataStore.RESEARCH,
     }
     return mapping[purpose]
+
+# ---------------------------------------------------------------------------
+# Privacy Service (Phase 5)
+# ---------------------------------------------------------------------------
+
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, delete
+
+class PrivacyService:
+    """
+    Handles data deletion and export workflows.
+    """
+    def __init__(self, db_session: AsyncSession):
+        self.db = db_session
+
+    async def delete_user_data(self, user_id: str, scope: DeletionScope) -> DeletionResult:
+        """
+        Deletes user data according to the requested scope.
+        Returns a DeletionResult indicating success or failure.
+        """
+        import uuid
+        from glow_api.models import UserAccountModel, SessionRecordModel, SessionMessageModel, ConsentRecordModel, UserPreferencesModel
+        
+        request_id = str(uuid.uuid4())
+        failed_scopes = []
+        audit_note = f"Executed deletion for scope: {scope.value}"
+
+        try:
+            # 1. Fetch user account internal ID
+            stmt = select(UserAccountModel).where(UserAccountModel.user_id == user_id)
+            res = await self.db.execute(stmt)
+            user_account = res.scalar_one_or_none()
+            
+            if not user_account:
+                return DeletionResult(
+                    request_id=request_id,
+                    completed_at=datetime.now(UTC),
+                    success=True, # Nothing to delete
+                    failed_scopes=[],
+                    audit_note="User not found, nothing to delete."
+                )
+
+            account_id = user_account.id
+
+            if scope in (DeletionScope.ACCOUNT_AND_ALL_DATA, DeletionScope.SESSION_TRANSCRIPTS):
+                # Delete session transcripts
+                stmt_sessions = select(SessionRecordModel.id).where(SessionRecordModel.user_account_id == account_id)
+                res_sessions = await self.db.execute(stmt_sessions)
+                session_ids = res_sessions.scalars().all()
+
+                if session_ids:
+                    await self.db.execute(
+                        delete(SessionMessageModel).where(SessionMessageModel.session_record_id.in_(session_ids))
+                    )
+                
+                # If only transcripts, we stop here (and maybe delete session records depending on policy, but usually they are kept for audit unless ACCOUNT_AND_ALL_DATA)
+                
+            if scope == DeletionScope.ACCOUNT_AND_ALL_DATA:
+                # Delete the entire account and all cascading records
+                await self.db.execute(delete(UserAccountModel).where(UserAccountModel.id == account_id))
+
+            await self.db.commit()
+            
+            return DeletionResult(
+                request_id=request_id,
+                completed_at=datetime.now(UTC),
+                success=True,
+                failed_scopes=[],
+                audit_note=audit_note
+            )
+        except Exception as e:
+            await self.db.rollback()
+            return DeletionResult(
+                request_id=request_id,
+                completed_at=datetime.now(UTC),
+                success=False,
+                failed_scopes=[(scope.value, str(e))],
+                audit_note=f"Deletion failed: {e}"
+            )
+
+    async def export_user_data(self, user_id: str) -> dict[str, Any]:
+        """
+        Exports user data including preferences, consent records, and decrypted session histories.
+        """
+        from glow_api.models import UserAccountModel, SessionRecordModel, SessionMessageModel, ConsentRecordModel, UserPreferencesModel
+        from glow_api.kms import kms_service
+        from glow_api.crypto import EnvelopeEncryption
+        
+        stmt = select(UserAccountModel).where(UserAccountModel.user_id == user_id)
+        res = await self.db.execute(stmt)
+        user_account = res.scalar_one_or_none()
+        
+        if not user_account:
+            raise ValueError("User not found")
+
+        export_data = {
+            "user_id": user_id,
+            "created_at": user_account.created_at.isoformat(),
+            "preferences": {},
+            "consents": [],
+            "sessions": []
+        }
+        
+        # Load Preferences
+        pref_stmt = select(UserPreferencesModel).where(UserPreferencesModel.user_account_id == user_account.id)
+        pref_res = await self.db.execute(pref_stmt)
+        pref = pref_res.scalar_one_or_none()
+        if pref:
+            export_data["preferences"] = {
+                "locale": pref.locale.value if hasattr(pref.locale, "value") else pref.locale,
+                "session_mode": pref.session_mode.value if hasattr(pref.session_mode, "value") else pref.session_mode,
+                "avatar_disclosure": pref.avatar_disclosure.value if hasattr(pref.avatar_disclosure, "value") else pref.avatar_disclosure,
+                "input_modality": pref.input_modality.value if hasattr(pref.input_modality, "value") else pref.input_modality
+            }
+
+        # Load Sessions & Messages
+        sess_stmt = select(SessionRecordModel).where(SessionRecordModel.user_account_id == user_account.id)
+        sess_res = await self.db.execute(sess_stmt)
+        sessions = sess_res.scalars().all()
+        
+        for sess in sessions:
+            sess_data = {
+                "session_id": sess.session_id,
+                "started_at": sess.started_at.isoformat() if sess.started_at else None,
+                "messages": []
+            }
+            
+            msg_stmt = select(SessionMessageModel).where(SessionMessageModel.session_record_id == sess.id).order_by(SessionMessageModel.timestamp.asc())
+            msg_res = await self.db.execute(msg_stmt)
+            messages = msg_res.scalars().all()
+            
+            for m in messages:
+                key = kms_service.get_master_key(m.key_id)
+                nonce = m.encrypted_content[:12]
+                ciphertext = m.encrypted_content[12:]
+                decrypted_content = EnvelopeEncryption.decrypt(key, nonce, ciphertext).decode('utf-8')
+                
+                sess_data["messages"].append({
+                    "role": m.role,
+                    "content": decrypted_content,
+                    "timestamp": m.timestamp.isoformat()
+                })
+                
+            export_data["sessions"].append(sess_data)
+
+        return export_data

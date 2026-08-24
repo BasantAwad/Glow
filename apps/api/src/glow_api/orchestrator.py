@@ -11,6 +11,9 @@ import datetime
 import uuid
 from typing import Sequence
 
+from glow_api.kms import kms_service
+from glow_api.crypto import EnvelopeEncryption
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -97,10 +100,15 @@ class SessionOrchestrator:
     ) -> None:
         """Save a message if transcript retention is consented to."""
         if consent.transcript_retention:
+            key_id = "default"
+            key = kms_service.get_master_key(key_id)
+            nonce, ciphertext = EnvelopeEncryption.encrypt(key, content.encode('utf-8'))
+            
             msg = SessionMessageModel(
                 session_record_id=record_id,
                 role=role,
-                content=content,
+                encrypted_content=nonce + ciphertext,
+                key_id=key_id,
                 timestamp=datetime.datetime.now(datetime.UTC)
             )
             self.db.add(msg)
@@ -113,7 +121,7 @@ class SessionOrchestrator:
     ) -> dict[str, str]:
         """Start a new active session."""
         if not user.can_start_session:
-            raise AuthenticationError("User cannot start sessions (age unverified or inactive).")
+            raise AuthenticationError(detail="User cannot start sessions (age unverified or inactive).")
         
         if not self.policy_engine.can_start_session(user):
             raise ValueError("Billing required. Please purchase sessions.")
@@ -137,7 +145,7 @@ class SessionOrchestrator:
         result = await self.db.execute(stmt)
         db_user = result.scalar_one_or_none()
         if not db_user:
-            raise NotFoundError("User account not found in database.")
+            raise NotFoundError(detail="User account not found in database.")
 
         db_record = SessionRecordModel(
             session_id=record.session_id,
@@ -172,7 +180,7 @@ class SessionOrchestrator:
         res = await self.db.execute(stmt)
         db_session = res.scalar_one_or_none()
         if not db_session:
-            raise NotFoundError("Session not found.")
+            raise NotFoundError(detail="Session not found.")
         
         if db_session.state != SessionState.ACTIVE.value:
             raise ValueError(f"Cannot send message to session in state {db_session.state}.")
@@ -209,9 +217,16 @@ class SessionOrchestrator:
         history_res = await self.db.execute(history_stmt)
         history_msgs = history_res.scalars().all()
         
-        history_tuples = tuple(
-            (m.role, m.content) for m in history_msgs if m.content != content
-        )
+        history_tuples = []
+        for m in history_msgs:
+            key = kms_service.get_master_key(m.key_id)
+            nonce = m.encrypted_content[:12]
+            ciphertext = m.encrypted_content[12:]
+            decrypted = EnvelopeEncryption.decrypt(key, nonce, ciphertext).decode('utf-8')
+            if decrypted != content:
+                history_tuples.append((m.role, decrypted))
+                
+        history_tuples = tuple(history_tuples)
 
         # GENERATE
         request = GenerationRequest(

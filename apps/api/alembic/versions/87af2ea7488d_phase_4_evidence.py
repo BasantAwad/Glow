@@ -18,11 +18,9 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
-import pgvector.sqlalchemy
-
 def upgrade() -> None:
     """Upgrade schema."""
-    op.execute('CREATE EXTENSION IF NOT EXISTS vector')
+    # op.execute('CREATE EXTENSION IF NOT EXISTS vector')
     
     op.create_table(
         'evidence_entries',
@@ -30,10 +28,10 @@ def upgrade() -> None:
         sa.Column('entry_id', sa.String(length=64), nullable=False),
         sa.Column('title', sa.String(), nullable=False),
         sa.Column('content_text', sa.String(), nullable=False),
-        sa.Column('embedding', pgvector.sqlalchemy.Vector(dim=1536), nullable=True),
+        sa.Column('embedding', sa.JSON(), nullable=True),
         sa.Column('evidence_type', sa.String(length=64), nullable=False),
         sa.Column('locale', sa.String(length=20), nullable=False),
-        sa.Column('jurisdiction', sa.dialects.postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column('jurisdiction', sa.JSON(), nullable=False),
         sa.Column('license', sa.String(length=64), nullable=False),
         sa.Column('license_url', sa.String(), nullable=False),
         sa.Column('source_url', sa.String(), nullable=False),
@@ -43,7 +41,7 @@ def upgrade() -> None:
         sa.Column('is_approved', sa.Boolean(), nullable=False),
         sa.Column('approved_by', sa.String(), nullable=True),
         sa.Column('approved_at', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('permitted_uses', sa.dialects.postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column('permitted_uses', sa.JSON(), nullable=False),
         sa.Column('clinical_notes', sa.String(), nullable=False),
         sa.PrimaryKeyConstraint('id', name=op.f('pk_evidence_entries'))
     )
@@ -54,4 +52,4 @@ def downgrade() -> None:
     """Downgrade schema."""
     op.drop_index(op.f('ix_evidence_entries_entry_id'), table_name='evidence_entries')
     op.drop_table('evidence_entries')
-    op.execute('DROP EXTENSION IF EXISTS vector')
+    # op.execute('DROP EXTENSION IF EXISTS vector')

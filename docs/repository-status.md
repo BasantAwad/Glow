@@ -120,11 +120,12 @@ Phase 0 exit criterion per CLAUDE.md §12: "A human can clone, install, and run 
 
 **Phase 1, Step 1: Typed consent model + validation (provider-agnostic)**
 
-Rationale:
-- Consent is the prerequisite for every subsequent phase
-- Can be implemented and unit-tested without a database or auth provider
-- Establishes the patterns all future phases depend on
-- Lowest-risk Phase 1 component
+- **AI Integrations**: 
+  - LLM: `vLLM` (Local, strictly decoupled, currently using `Qwen/Qwen2.5-14B-Instruct` configuration).
+  - STT: `faster-whisper-large-v3` (Local inference).
+  - TTS: `coqui/XTTS-v2` (Local inference).
+  - WebSockets: Phase 6D bidirectional voice stream is configured.
+  - Avatar: Phase 6E (Audio2Face) is deferred until Phase 6A-6D are fully live-tested in production.
 
 ---
 

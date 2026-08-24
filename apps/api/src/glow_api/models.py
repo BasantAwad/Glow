@@ -12,8 +12,7 @@ from __future__ import annotations
 from typing import Any
 import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, LargeBinary, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from glow_api.database import Base
@@ -55,7 +54,7 @@ class UserPreferencesModel(Base):
     avatar_disclosure: Mapped[AvatarDisclosurePreference] = mapped_column(Enum(AvatarDisclosurePreference, name="avatar_disclosure", native_enum=False), nullable=False)
     input_modality: Mapped[InputModality] = mapped_column(Enum(InputModality, name="input_modality", native_enum=False), nullable=False)
     persona_name: Mapped[str | None] = mapped_column(String(40), nullable=True)
-    accessibility: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
+    accessibility: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     preferred_session_minutes: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
 
     user: Mapped["UserAccountModel"] = relationship(back_populates="preferences")
@@ -123,7 +122,8 @@ class SessionMessageModel(Base):
     session_record_id: Mapped[int] = mapped_column(ForeignKey("session_records.id", ondelete="CASCADE"), index=True, nullable=False)
     
     role: Mapped[str] = mapped_column(String(32), nullable=False)  # 'user' or 'assistant'
-    content: Mapped[str] = mapped_column(String, nullable=False)
+    encrypted_content: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    key_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
     timestamp: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.UTC), nullable=False)
     
     session: Mapped["SessionRecordModel"] = relationship()
@@ -143,18 +143,16 @@ class SafetyAuditEventModel(Base):
     risk_tier: Mapped[int] = mapped_column(Integer, nullable=False)
     
     # Store JSON array of signal names
-    signals: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    signals: Mapped[list[str]] = mapped_column(JSON, nullable=False)
     action_taken: Mapped[str] = mapped_column(String(64), nullable=False)
     audit_note: Mapped[str] = mapped_column(String, nullable=False)
     policy_version: Mapped[str] = mapped_column(String(64), nullable=False)
-    extra_metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+    extra_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
 
 
 # ---------------------------------------------------------------------------
 # Phase 4: Evidence and RAG Models
 # ---------------------------------------------------------------------------
-
-from pgvector.sqlalchemy import Vector
 
 class EvidenceEntryModel(Base):
     """Stores approved clinical evidence entries with full provenance metadata."""
@@ -166,14 +164,14 @@ class EvidenceEntryModel(Base):
     title: Mapped[str] = mapped_column(String, nullable=False)
     content_text: Mapped[str] = mapped_column(String, nullable=False)
     
-    # Store the vector embedding for semantic search (using 1536 dimensions as standard)
-    embedding: Mapped[Any] = mapped_column(Vector(1536), nullable=True)
+    # Store the vector embedding for semantic search
+    embedding: Mapped[Any] = mapped_column(JSON, nullable=True)
 
     evidence_type: Mapped[str] = mapped_column(String(64), nullable=False)
     locale: Mapped[str] = mapped_column(String(20), nullable=False)
     
     # Store tuples as JSON arrays
-    jurisdiction: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    jurisdiction: Mapped[list[str]] = mapped_column(JSON, nullable=False)
     
     license: Mapped[str] = mapped_column(String(64), nullable=False)
     license_url: Mapped[str] = mapped_column(String, nullable=False)
@@ -188,6 +186,6 @@ class EvidenceEntryModel(Base):
     approved_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     
     # Store set as JSON array
-    permitted_uses: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    permitted_uses: Mapped[list[str]] = mapped_column(JSON, nullable=False)
     clinical_notes: Mapped[str] = mapped_column(String, default="", nullable=False)
 

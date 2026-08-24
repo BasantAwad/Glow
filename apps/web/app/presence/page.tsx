@@ -2,9 +2,17 @@
 
 import Script from "next/script";
 import { useLanguage } from "../../contexts/LanguageContext";
+import { useState } from "react";
 
 export default function PresencePage() {
   const { t } = useLanguage();
+  const [selectedPersona, setSelectedPersona] = useState("Dr. Sarah");
+
+  const personas = [
+    { id: "dr-sarah", name: "Dr. Sarah", trait: "Empathetic & Warm" },
+    { id: "dr-alex", name: "Dr. Alex", trait: "Direct & Practical" },
+    { id: "dr-mei", name: "Dr. Mei", trait: "Calm & Reflective" }
+  ];
 
   return (
     <main className="flex-1 flex flex-col max-w-5xl w-full mx-auto p-4 sm:p-6 lg:p-8 h-[calc(100vh-160px)]">
@@ -19,8 +27,21 @@ export default function PresencePage() {
       <div className="flex-1 relative flex flex-col items-center justify-center min-h-[400px]">
         {/* Layer 1: Empty Background Layer (User can replace with 3D/Video background) */}
         <div className="absolute inset-0 z-0 glass rounded-3xl overflow-hidden shadow-2xl flex items-center justify-center bg-black/10">
-          <span className="text-muted-foreground/50 select-none text-sm font-medium tracking-widest uppercase">
-            [ Background Layer ]
+          <div className="absolute top-4 left-4 right-4 z-20 flex justify-center space-x-2 bg-white/10 p-2 rounded-xl backdrop-blur-md">
+            {personas.map(p => (
+              <button
+                key={p.id}
+                onClick={() => setSelectedPersona(p.name)}
+                className={`px-4 py-2 rounded-lg transition-all text-sm font-medium ${
+                  selectedPersona === p.name ? 'bg-primary text-primary-foreground shadow-md' : 'bg-transparent text-foreground/70 hover:bg-white/20'
+                }`}
+              >
+                {p.name} <span className="text-xs opacity-70 block">{p.trait}</span>
+              </button>
+            ))}
+          </div>
+          <span className="text-muted-foreground/50 select-none text-sm font-medium tracking-widest uppercase mt-20">
+            [ Avatar Layer: {selectedPersona} ]
           </span>
         </div>
 
