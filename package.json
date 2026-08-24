@@ -1,0 +1,15 @@
+{
+  "name": "glow",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "npm@10.9.2",
+  "workspaces": [
+    "apps/web"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace @glow/web",
+    "build:web": "npm run build --workspace @glow/web",
+    "lint:web": "npm run lint --workspace @glow/web",
+    "typecheck:web": "npm run typecheck --workspace @glow/web"
+  }
+}

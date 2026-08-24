@@ -1,0 +1,23 @@
+flowchart LR
+  U[User: Web / Mobile] --> C[Client UI]
+  C --> G[API Gateway + Auth + Consent]
+  C --> RTC[WebRTC Media Gateway]
+  G --> S[Session Orchestrator]
+  RTC --> STT[Speech-to-Text]
+  STT --> S
+  S --> P[Conversation Policy Engine]
+  P --> R[Safety Control Plane]
+  R -->|risk state| X[Crisis State Machine]
+  P --> Q[Clinical Retrieval Layer]
+  Q --> V[(Versioned Evidence Store)]
+  P --> L[LLM Response Planner]
+  L --> O[Response Validator]
+  O --> TTS[Multilingual TTS]
+  O --> TXT[Text Response]
+  TTS --> A[Avatar Animation / Lip Sync]
+  A --> C
+  TXT --> C
+  S --> D[(Encrypted Session Store)]
+  R --> AU[(Restricted Audit Store)]
+  BILL[Billing Service] --> G
+  ADMIN[Clinical + Safety Admin] --> AU

@@ -1,0 +1,26 @@
+sequenceDiagram
+  participant User
+  participant Client
+  participant Gateway
+  participant Safety
+  participant Orchestrator
+  participant Knowledge
+  participant LLM
+  participant Voice
+  participant Avatar
+
+  User->>Client: Speak or type
+  Client->>Gateway: Authenticated turn + consent context
+  Gateway->>Safety: Fast pre-generation risk scan
+  Safety-->>Gateway: Risk tier + required policy
+  Gateway->>Orchestrator: Turn, session state, safety state
+  Orchestrator->>Knowledge: Retrieve approved evidence/resources
+  Knowledge-->>Orchestrator: Cited context
+  Orchestrator->>LLM: Constrained response plan
+  LLM-->>Orchestrator: Draft response + structured metadata
+  Orchestrator->>Safety: Post-generation safety validation
+  Safety-->>Orchestrator: Approve, rewrite, or crisis template
+  Orchestrator->>Voice: Approved text + locale + voice
+  Voice-->>Avatar: Audio + phoneme/timing stream
+  Avatar-->>Client: Rendered facial/lip animation
+  Client-->>User: Text, audio, and visual response
