@@ -1,0 +1,158 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Glow design system — dreamy nocturnal glassmorphism.
+ * All colors in oklch. Never hardcode colors in components.
+ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-glow: var(--glow);
+  --color-glow-soft: var(--glow-soft);
+  --color-petal: var(--petal);
+  --font-display: "Quicksand", ui-rounded, system-ui, sans-serif;
+  --font-sans: "Nunito Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  --radius: 1.75rem;
+  --background: oklch(0.19 0.07 285);
+  --foreground: oklch(0.97 0.012 300);
+  --card: oklch(0.99 0.01 300 / 12%);
+  --card-foreground: oklch(0.97 0.012 300);
+  --popover: oklch(0.24 0.07 285);
+  --popover-foreground: oklch(0.97 0.012 300);
+  --primary: oklch(0.72 0.14 300);
+  --primary-foreground: oklch(0.18 0.06 285);
+  --secondary: oklch(0.99 0.01 300 / 14%);
+  --secondary-foreground: oklch(0.97 0.012 300);
+  --muted: oklch(0.99 0.01 300 / 10%);
+  --muted-foreground: oklch(0.86 0.04 300 / 78%);
+  --accent: oklch(0.82 0.1 340);
+  --accent-foreground: oklch(0.2 0.06 300);
+  --destructive: oklch(0.68 0.19 20);
+  --destructive-foreground: oklch(0.98 0.01 300);
+  --border: oklch(1 0 0 / 18%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.8 0.11 300);
+  --glow: oklch(0.78 0.13 300);
+  --glow-soft: oklch(0.88 0.07 320);
+  --petal: oklch(0.85 0.09 350);
+
+  --gradient-aurora: linear-gradient(
+    135deg,
+    oklch(0.72 0.14 300 / 70%),
+    oklch(0.85 0.09 350 / 60%)
+  );
+  --gradient-veil: linear-gradient(
+    180deg,
+    oklch(1 0 0 / 18%),
+    oklch(1 0 0 / 6%)
+  );
+  --shadow-float: 0 24px 60px -24px oklch(0.15 0.08 290 / 70%);
+  --shadow-halo: 0 0 40px -6px oklch(0.78 0.13 300 / 60%);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+  }
+}
+
+/* Frosted glass surface */
+@utility glass {
+  background-image: var(--gradient-veil);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-float);
+}
+
+@utility glass-soft {
+  background-color: oklch(1 0 0 / 8%);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid oklch(1 0 0 / 14%);
+}
+
+@utility aurora {
+  background-image: var(--gradient-aurora);
+}
+
+@utility halo {
+  box-shadow: var(--shadow-halo);
+}
+
+@utility breathe {
+  animation: breathe 7s ease-in-out infinite;
+}
+
+@utility drift-up {
+  animation: drift-up 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 1;
+  }
+}
+
+@keyframes drift-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

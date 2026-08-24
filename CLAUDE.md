@@ -282,12 +282,140 @@ None of these are assumed HIPAA-eligible, GDPR-compliant, or commercially pre-li
 
 ## 10. Repository conventions
 
-**No stack has been chosen yet.** This section is intentionally incomplete until Phase 0 decisions are made (see §15). Once decided, this section must be filled in with the real, verified commands — not aspirational ones. Until then:
+**Stack decided: Python 3.13 / FastAPI backend + Next.js 16 / TypeScript frontend (see ADR 0001).**
 
-- Do not invent a package manager, framework, or directory layout and present it as existing convention.
-- The first engineering task is to record the Phase 0 decisions (language/runtime, web framework, database, model-gateway approach, monorepo vs. polyrepo) as an ADR in `docs/adr/0001-initial-stack.md`, then scaffold accordingly.
-- Once scaffolded, this section must document, from what actually exists in the repo (not from memory or preference): package manager and install command; dev command; test command; type-check/lint command; build/deploy command; environment variable names (never secret values); source directory structure; DB/migration workflow; API conventions; auth conventions; error-handling conventions; logging/observability conventions; how to run local dependencies; how to run a single test; how to verify a change before committing.
-- Until that update happens, any agent working in this repo should re-derive these facts from the actual filesystem (`package.json`/`pyproject.toml`/`go.mod`/etc., CI config, README) rather than trusting this file's silence as permission to guess.
+This section is derived from what actually exists in the repository as of 2026-08-24 and must be updated whenever the project structure, commands, or conventions change.
+
+### Package managers
+
+- **Backend:** `pip` with `pyproject.toml`. Runtime is `.tools/python313/python.exe` (Python 3.13.15, gitignored local install). For CI or fresh environments use any Python 3.13.x and `pip install -e "apps/api[dev]"`.
+- **Frontend:** npm 10.9.2 (`package-lock.json` is committed). Run `npm install` from the repository root.
+
+### Install commands (from repo root)
+
+```powershell
+# Backend — run once per environment
+.tools\python313\Scripts\pip install -e "apps\api[dev]"
+
+# Frontend
+npm install
+```
+
+### Dev server commands
+
+```powershell
+# API (hot-reload)
+.tools\python313\Scripts\uvicorn glow_api.main:app --app-dir apps\api\src --reload
+
+# Web
+npm run dev:web
+```
+
+### Test commands
+
+```powershell
+# All backend tests (pytest + verbose)
+.tools\python313\Scripts\pytest apps\api\tests\ -v
+
+# Single backend test
+.tools\python313\Scripts\pytest apps\api\tests\test_health.py::test_health_check_returns_non_sensitive_process_status -v
+```
+
+### Type-check / lint commands
+
+```powershell
+# Backend — mypy strict
+.tools\python313\Scripts\mypy --config-file apps\api\pyproject.toml apps\api\src apps\api\tests
+
+# Backend — ruff lint
+.tools\python313\Scripts\ruff check apps\api\src apps\api\tests
+
+# Frontend — TypeScript
+npm run typecheck:web
+
+# Frontend — ESLint
+npm run lint:web
+```
+
+### Environment variables
+
+Prefix: `GLOW_`. See `.env.example` for the full list. Never commit `.env` or any secret value. Variables:
+
+| Variable | Default | Description |
+|---|---|---|
+| `GLOW_ENVIRONMENT` | `development` | `development` \| `test` \| `production` |
+| `GLOW_SERVICE_NAME` | `glow-api` | Appears in `/healthz` and structured logs |
+
+Phase 1+ will add `GLOW_DATABASE_URL`, `GLOW_AUTH_*`, Phase 3+ `GLOW_MODEL_*` — see `.env.example`.
+
+### Source directory structure
+
+```
+apps/
+  api/
+    pyproject.toml         — backend project manifest and tool config
+    src/glow_api/          — all backend source (import root)
+      main.py              — FastAPI app factory
+      settings.py          — typed env-var settings
+      consent.py           — Phase 1 consent model (types only; no DB yet)
+    tests/                 — pytest tests (mirrors src structure)
+  web/
+    package.json           — Next.js app
+    app/                   — Next.js App Router pages and layouts
+    tsconfig.json          — strict TypeScript config
+docs/
+  adr/                     — Architecture Decision Records
+  agent-progress.md        — Per-session AI agent log (always update)
+  repository-status.md     — Current state and backlog
+package.json               — npm workspaces root
+```
+
+### API conventions
+
+- All API endpoints are under `apps/api/src/glow_api/`.
+- Routes use `APIRouter`; routers are registered in `create_app()` in `main.py`.
+- Every endpoint must use a typed Pydantic `response_model`. No dict returns.
+- Privileged safety, consent, session-policy, and entitlement decisions are server-side only. Clients are never trusted for these.
+- Docs/OpenAPI routes are disabled (`docs_url=None`, `redoc_url=None`, `openapi_url=None`).
+
+### Auth conventions (Phase 1+, provider not yet selected)
+
+- All auth logic must be behind a provider-neutral adapter in `glow_api/auth.py`.
+- No endpoint beyond `/healthz` may be called without a valid authenticated identity and service-use consent.
+- Session tokens are short-lived; device/session tracking is server-side.
+
+### Error-handling conventions
+
+- Use typed exception classes; never leak raw exception messages to API responses.
+- Never include raw therapy content, user identifiers, or auth credentials in log lines.
+- Safety, auth, billing, and data-deletion errors must not be swallowed — surface and log them.
+
+### Logging/observability conventions
+
+- Structured JSON logs only. No raw transcript content in any log line.
+- Safety audit events go to a restricted, access-controlled audit store (Phase 3+).
+- Standard logs must be redacted of any PII or session content before emission.
+
+### Migration workflow (Phase 1+, when DB is added)
+
+```powershell
+# Generate migration
+.tools\python313\Scripts\alembic -c apps\api\alembic.ini revision --autogenerate -m "description"
+
+# Apply migrations
+.tools\python313\Scripts\alembic -c apps\api\alembic.ini upgrade head
+```
+
+### Verify a change before committing
+
+```powershell
+.tools\python313\Scripts\pytest apps\api\tests\ -v
+.tools\python313\Scripts\mypy --config-file apps\api\pyproject.toml apps\api\src apps\api\tests
+.tools\python313\Scripts\ruff check apps\api\src apps\api\tests
+npm run typecheck:web
+npm run lint:web
+```
+
 
 ---
 

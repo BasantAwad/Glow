@@ -11,5 +11,8 @@
     "build:web": "npm run build --workspace @glow/web",
     "lint:web": "npm run lint --workspace @glow/web",
     "typecheck:web": "npm run typecheck --workspace @glow/web"
+  },
+  "devDependencies": {
+    "next": "^16.0.0"
   }
 }

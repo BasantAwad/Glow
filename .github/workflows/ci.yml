@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "develop"]
+  pull_request:
+    branches: ["main", "develop"]
+
+# Cancel in-progress runs for the same branch/PR.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend — Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install backend dependencies
+        run: pip install -e "apps/api[dev]"
+
+      - name: Ruff lint
+        run: ruff check apps/api/src apps/api/tests
+
+      - name: Mypy strict type-check
+        run: mypy --config-file apps/api/pyproject.toml apps/api/src apps/api/tests
+
+      - name: Pytest
+        run: pytest apps/api/tests/ -v
+        env:
+          GLOW_ENVIRONMENT: test
+
+  frontend:
+    name: Frontend — Node ${{ matrix.node-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["22"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+
+      - name: Install frontend dependencies
+        run: npm install
+
+      - name: TypeScript type-check
+        run: npm run typecheck:web
+
+      - name: ESLint
+        run: npm run lint:web
