@@ -79,6 +79,10 @@ class ConsentRecordModel(Base):
     session_summary: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     personalisation: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     research_and_model_improvement: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Long-term memory consent (ADR 0004) — separate opt-in, never bundled.
+    # Default: False.  server_default ensures existing rows without this column
+    # safely interpret as no memory consent.
+    memory_consent: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
 
     user: Mapped["UserAccountModel"] = relationship(back_populates="consents")
 

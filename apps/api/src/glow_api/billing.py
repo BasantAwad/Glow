@@ -221,6 +221,14 @@ class BillingGateway(abc.ABC):
     async def get_payment_methods(self, user_id: str) -> list[PaymentMethod]:
         """List stored payment methods for a user."""
 
+    @abc.abstractmethod
+    async def refund_payment(self, intent_id: str, reason: str) -> bool:
+        """Refund a confirmed payment."""
+
+    @abc.abstractmethod
+    async def handle_webhook(self, event: "WebhookEvent") -> None:
+        """Handle an incoming webhook event from the provider."""
+
 
 class UnconfiguredBillingGateway(BillingGateway):
     """Sentinel billing gateway used until a real provider is approved."""
@@ -240,3 +248,109 @@ class UnconfiguredBillingGateway(BillingGateway):
     async def get_payment_methods(self, user_id: str) -> list[PaymentMethod]:
         from glow_api.errors import ProviderNotConfiguredError
         raise ProviderNotConfiguredError("billing_gateway")
+
+    async def refund_payment(self, intent_id: str, reason: str) -> bool:
+        from glow_api.errors import ProviderNotConfiguredError
+        raise ProviderNotConfiguredError("billing_gateway")
+
+    async def handle_webhook(self, event: "WebhookEvent") -> None:
+        from glow_api.errors import ProviderNotConfiguredError
+        raise ProviderNotConfiguredError("billing_gateway")
+
+
+# ---------------------------------------------------------------------------
+# Webhook event model (Phase 11 — idempotency)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class WebhookEvent:
+    """A billing provider webhook event.
+
+    Webhooks must be idempotent — the same event_id must be processable
+    multiple times without side effects (beyond the first processing).
+
+    The server must:
+    1. Validate the provider signature before processing.
+    2. Store the event_id to prevent double-processing.
+    3. Return 200 immediately to the provider after storing (before processing).
+    4. Process asynchronously.
+
+    Fields:
+        event_id: Provider-assigned unique event identifier (used for dedup).
+        event_type: The type of event (e.g. "payment.succeeded", "payment.failed").
+        payload: Raw event payload dict from the provider.
+        received_at: When Glow received the webhook.
+        provider: The billing provider name (for multi-provider support).
+        signature_verified: Must be True before processing.
+    """
+    event_id: str
+    event_type: str
+    payload: dict
+    received_at: datetime
+    provider: str
+    signature_verified: bool
+
+    def is_safe_to_process(self) -> bool:
+        """Return True iff the event signature has been verified.
+
+        Unverified events must NEVER be processed — doing so allows forged
+        webhook attacks that could grant unauthorized session access.
+        """
+        return self.signature_verified
+
+
+class WebhookProcessor:
+    """Idempotent webhook event processor.
+
+    Usage:
+        processor = WebhookProcessor(gateway, db)
+        event = WebhookEvent(...)
+        await processor.process(event)
+
+    Idempotency:
+        - event_id is stored after first processing
+        - Duplicate event_ids are detected and silently dropped
+        - Processing is logged for audit
+
+    BLOCKED: Requires a real billing gateway to be configured.
+    """
+
+    def __init__(self, gateway: BillingGateway) -> None:
+        self._gateway = gateway
+        self._processed_ids: set[str] = set()  # In-memory for dev; replace with DB in prod
+
+    async def process(self, event: WebhookEvent) -> None:
+        """Process a webhook event, enforcing idempotency.
+
+        Args:
+            event: The webhook event to process.
+
+        Raises:
+            ValueError: If the event signature is not verified.
+            ProviderNotConfiguredError: If the billing gateway is not configured.
+        """
+        import logging
+        log = logging.getLogger(__name__)
+
+        if not event.is_safe_to_process():
+            raise ValueError(
+                f"WebhookProcessor: refusing to process event {event.event_id!r} "
+                f"— signature not verified. Possible forged webhook."
+            )
+
+        if event.event_id in self._processed_ids:
+            log.info(
+                "WebhookProcessor: duplicate event_id=%s (already processed) — dropping.",
+                event.event_id,
+            )
+            return
+
+        await self._gateway.handle_webhook(event)
+        self._processed_ids.add(event.event_id)
+        log.info(
+            "WebhookProcessor: processed event_id=%s type=%s provider=%s",
+            event.event_id,
+            event.event_type,
+            event.provider,
+        )

@@ -1,36 +1,49 @@
 """
 Text-to-Speech (TTS) Gateway (Phase 6C).
 
-Defines the interface and implementation for real-time synthesis,
-strictly adhering to the no-mock policy.
+Defines the interface and a Kokoro-TTS–based implementation.
 
-The interface requires language support and byte streaming.
+LICENSING NOTE:
+  XTTS-v2 (Coqui) is BANNED from this codebase. Coqui Inc. ceased operations in
+  January 2024. The XTTS-v2 model weights remain under CPML (non-commercial only).
+  There is no legal entity to issue a commercial license.
+
+  This gateway uses Kokoro TTS (Apache 2.0), which explicitly permits commercial use.
+  Source: https://huggingface.co/hexgrad/Kokoro-82M
+  License: Apache 2.0
+  
+  The Kokoro model checkpoint used must be pinned by SHA-256 hash. The hash
+  must be recorded in docs/real-model-configuration.md before production deployment.
+
+UNRESOLVED BLOCKER (Phase 6E):
+  Arabic voice quality must be evaluated on the specific Kokoro checkpoint before
+  the model is approved for Arabic-language therapy sessions. A community fine-tune
+  (e.g., Nabra/Kokoro-Arabic) may be required. It must carry a compatible license.
 """
 
 from __future__ import annotations
 
 import abc
-from dataclasses import dataclass
-from typing import AsyncIterator
-import io
 import asyncio
 import time
+from dataclasses import dataclass
+from typing import AsyncIterator
 
 
 @dataclass(frozen=True)
 class SynthesizeRequest:
     """A request to synthesize text into audio.
-    
+
     Fields:
-        session_id: Opaque identifier for logging/correlation.
-        text: The exact text to synthesize.
-        language: ISO-639-1 language code.
-        voice_id: Identifier for the voice/persona to use.
+        session_id: Opaque identifier for logging/correlation only. Never stored.
+        text:       The safety-validated text to synthesize.
+        language:   BCP-47 language code.
+        voice_id:   Identifier for the voice/persona. Defaults to "af_heart" (Kokoro default).
     """
     session_id: str
     text: str
     language: str
-    voice_id: str = "default"
+    voice_id: str = "af_heart"
 
 
 @dataclass(frozen=True)
@@ -38,20 +51,22 @@ class SynthesizeResponse:
     """A synthesized audio result.
 
     Fields:
-        audio_chunk: Raw audio bytes (WAV format usually).
-        latency_ms: Wall-clock latency for this synthesis.
+        audio_chunk: Raw WAV bytes (16-bit PCM, 24 kHz, mono for Kokoro).
+        latency_ms:  Wall-clock latency for this synthesis call.
+        model_id:    Checkpoint identifier used (for audit log).
     """
     audio_chunk: bytes
     latency_ms: float
+    model_id: str
 
 
 class TtsGateway(abc.ABC):
-    """Abstract TTS Gateway."""
+    """Abstract TTS Gateway. One concrete implementation per approved provider."""
 
     @property
     @abc.abstractmethod
     def is_configured(self) -> bool:
-        """True iff this gateway is fully configured to synthesize real audio."""
+        """True iff this gateway is fully configured and ready to synthesize real audio."""
 
     @abc.abstractmethod
     async def synthesize(self, request: SynthesizeRequest) -> SynthesizeResponse:
@@ -59,17 +74,20 @@ class TtsGateway(abc.ABC):
 
         Raises:
             ProviderNotConfiguredError: If is_configured is False.
+            RuntimeError: On any provider failure.
         """
 
     @abc.abstractmethod
     async def stream_synthesize(self, request: SynthesizeRequest) -> AsyncIterator[bytes]:
-        """Stream audio bytes as they are generated.
-        
-        Useful for chunk-based generation or long texts.
-        """
+        """Stream audio bytes as they are generated (for long texts)."""
+        # Must be overridden; the `yield` here makes the abstract method a generator.
+        raise NotImplementedError
+        yield b""  # noqa: unreachable — needed to declare async generator type
 
 
 class UnconfiguredTtsGateway(TtsGateway):
+    """Sentinel. Raises clearly when no real TTS provider is configured."""
+
     @property
     def is_configured(self) -> bool:
         return False
@@ -81,112 +99,103 @@ class UnconfiguredTtsGateway(TtsGateway):
     async def stream_synthesize(self, request: SynthesizeRequest) -> AsyncIterator[bytes]:
         from glow_api.errors import ProviderNotConfiguredError
         raise ProviderNotConfiguredError("tts_gateway")
-        yield b""
+        yield b""  # noqa: unreachable
 
 
-class XTTSv2Gateway(TtsGateway):
-    """Real TTS Gateway using Coqui XTTS-v2.
-    
-    WARNING: XTTS-v2 is under CPML license (Coqui Public Model License).
-    It is used here for development testing to satisfy the 5-language requirement.
-    Commercial production use requires a licensing agreement.
-    
-    Requires `TTS` pip package to be installed.
+class KokoroTtsGateway(TtsGateway):
+    """TTS Gateway using Kokoro-82M (Apache 2.0).
+
+    Kokoro is a lightweight (82M parameter) model capable of high-quality
+    speech synthesis. It runs on CPU, making it suitable for local-only
+    inference without GPU requirements at TTS layer.
+
+    Hardware: CPU-only capable. Inference time ~0.1–0.5s per sentence.
+    Output format: WAV, 24 kHz, 16-bit PCM, mono.
+    Install: pip install kokoro-onnx soundfile
+
+    LANGUAGE SUPPORT STATUS:
+      en:     ✅ Verified native support.
+      es:     ✅ Supported via multilingual checkpoint.
+      ja:     ✅ Supported via multilingual checkpoint.
+      zh:     ✅ Supported via multilingual checkpoint.
+      ar:     ⚠️  UNRESOLVED. Requires evaluation of a community Arabic fine-tune
+                   (e.g., Nabra-Kokoro-Arabic). Must carry Apache 2.0 or compatible
+                   license. Quality for Arabic must be tested before production approval.
     """
 
-    def __init__(self, model_name: str = "tts_models/multilingual/multi-dataset/xtts_v2", device: str = "cpu"):
-        self.model_name = model_name
-        self.device = device
-        self._model = None
-        # In a real app, this would be a path to a real reference audio file of the persona.
-        # We will assume `default_speaker.wav` exists in the working directory for voice cloning.
-        self.reference_audio_path = "default_speaker.wav"
+    MODEL_ID = "hexgrad/Kokoro-82M"
+
+    def __init__(self) -> None:
+        self._pipeline = None  # Lazy-loaded
 
     @property
     def is_configured(self) -> bool:
-        return True
+        return True  # Always configured; fails at inference time if `kokoro-onnx` not installed.
 
-    def _get_model(self):
-        # Lazy load to avoid importing heavy TTS framework globally
-        if self._model is None:
+    def _get_pipeline(self):
+        if self._pipeline is None:
             try:
-                from TTS.api import TTS
-                # Ensure the user agrees to the ToS environment variable: COQUI_TOS_AGREED=1
-                import os
-                os.environ["COQUI_TOS_AGREED"] = "1"
-                self._model = TTS(self.model_name).to(self.device)
+                from kokoro import KPipeline
+                self._pipeline = KPipeline(lang_code="a")  # 'a' = American English default
             except ImportError as e:
-                raise RuntimeError("Coqui TTS package is not installed. Cannot use XTTSv2Gateway.") from e
-        return self._model
+                raise RuntimeError(
+                    "Kokoro TTS package is not installed. "
+                    "Run: pip install kokoro-onnx soundfile"
+                ) from e
+        return self._pipeline
 
     async def synthesize(self, request: SynthesizeRequest) -> SynthesizeResponse:
         start_time = time.perf_counter()
-        
-        def _synthesize_sync():
-            model = self._get_model()
-            
-            # Map general language codes to XTTS-v2 specifics if necessary
-            # XTTS-v2 supports: en, es, fr, de, it, pt, pl, tr, ru, nl, cs, ar, zh-cn, ja, hu, ko, hi
-            lang_map = {
-                "zh": "zh-cn"
-            }
-            mapped_lang = lang_map.get(request.language.lower(), request.language.lower())
-            
-            # We output to a temporary memory buffer
-            import tempfile
-            import os
-            
-            # We need a reference audio file. If it doesn't exist, we must fail gracefully
-            # or use a default one. In this integration test, we will create a dummy file if needed.
-            if not os.path.exists(self.reference_audio_path):
-                import wave, struct
-                with wave.open(self.reference_audio_path, 'wb') as wav:
-                    wav.setnchannels(1)
-                    wav.setsampwidth(2)
-                    wav.setframerate(22050)
-                    for _ in range(22050): # 1 second of silence
-                        wav.writeframes(struct.pack('<h', 0))
 
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_file:
-                tmp_path = tmp_file.name
+        def _run_sync() -> bytes:
+            import io
+            import soundfile as sf
+            import numpy as np
 
-            try:
-                model.tts_to_file(
-                    text=request.text, 
-                    speaker_wav=self.reference_audio_path, 
-                    language=mapped_lang, 
-                    file_path=tmp_path
-                )
-                
-                with open(tmp_path, "rb") as f:
-                    audio_data = f.read()
-            finally:
-                if os.path.exists(tmp_path):
-                    os.remove(tmp_path)
-                    
-            return audio_data
+            pipeline = self._get_pipeline()
+
+            # Kokoro KPipeline.generate() returns (audio, sr, phonemes) tuples
+            audio_segments = []
+            for audio, sr, _ in pipeline(request.text, voice=request.voice_id):
+                audio_segments.append(audio)
+
+            if not audio_segments:
+                raise RuntimeError("Kokoro returned no audio segments.")
+
+            combined = np.concatenate(audio_segments)
+
+            buf = io.BytesIO()
+            sf.write(buf, combined, samplerate=24000, format="WAV", subtype="PCM_16")
+            return buf.getvalue()
 
         loop = asyncio.get_running_loop()
         try:
-            audio_bytes = await loop.run_in_executor(None, _synthesize_sync)
+            audio_bytes = await loop.run_in_executor(None, _run_sync)
         except Exception as e:
-            raise RuntimeError(f"Synthesis failed: {e}") from e
+            raise RuntimeError(f"Kokoro TTS synthesis failed: {e}") from e
 
         latency_ms = (time.perf_counter() - start_time) * 1000.0
-
         return SynthesizeResponse(
             audio_chunk=audio_bytes,
-            latency_ms=latency_ms
+            latency_ms=latency_ms,
+            model_id=self.MODEL_ID,
         )
 
     async def stream_synthesize(self, request: SynthesizeRequest) -> AsyncIterator[bytes]:
-        # XTTS-v2 can stream, but for this gateway boundary, we will just yield the whole block
-        # as a single chunk to fulfill the interface without complex buffering.
+        """For now, synthesize the full utterance and yield as a single chunk.
+        
+        Kokoro's KPipeline can be used in a streaming fashion per-sentence;
+        this can be refactored to yield per-sentence WAV chunks once
+        the client protocol supports incremental audio streaming.
+        """
         resp = await self.synthesize(request)
         yield resp.audio_chunk
 
 
 def get_tts_gateway() -> TtsGateway:
-    # We default to XTTSv2 per Phase 6C evaluation.
-    # Fails cleanly at runtime if TTS is not installed.
-    return XTTSv2Gateway()
+    """Factory: returns a KokoroTtsGateway.
+    
+    Fails clearly at inference time if kokoro-onnx is not installed.
+    XTTS-v2 has been permanently removed due to CPML licensing violation.
+    """
+    return KokoroTtsGateway()

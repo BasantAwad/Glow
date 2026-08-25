@@ -104,19 +104,19 @@ DEFAULT_FEATURE_FLAGS: dict[str, FeatureFlag] = {
     "voice_input": FeatureFlag(
         name="voice_input",
         enabled=False,
-        description="Enable voice input (STT). Requires approved STT provider.",
+        description="Enable voice input (STT). Requires approved STT provider and live test.",
         is_kill_switch=True,
     ),
     "voice_output": FeatureFlag(
         name="voice_output",
         enabled=False,
-        description="Enable voice output (TTS). Requires approved TTS provider.",
+        description="Enable voice output (TTS). Requires approved TTS provider and live test.",
         is_kill_switch=True,
     ),
     "avatar": FeatureFlag(
         name="avatar",
         enabled=False,
-        description="Enable visual avatar. Requires approved avatar provider.",
+        description="Enable visual avatar. Requires approved avatar provider. BLOCKED (18 blockers).",
         is_kill_switch=True,
     ),
     "paid_sessions": FeatureFlag(
@@ -137,7 +137,59 @@ DEFAULT_FEATURE_FLAGS: dict[str, FeatureFlag] = {
     "model_gateway": FeatureFlag(
         name="model_gateway",
         enabled=False,
-        description="Enable real model gateway. Requires approved model provider.",
+        description="Enable real model gateway. Requires approved model provider and running vLLM endpoint.",
+        is_kill_switch=True,
+    ),
+    "memory": FeatureFlag(
+        name="memory",
+        enabled=False,
+        description=(
+            "Enable long-term memory (Phase 7). Requires MEMORY_CONSENT from user, "
+            "PostgreSQL + pgvector for semantic search, and ADR 0004 compliance."
+        ),
+        is_kill_switch=True,
+    ),
+    # ---------------------------------------------------------------------------
+    # Language gates (ADR 0003)
+    # All therapy_* flags MUST remain disabled until per-language clinical review.
+    # Enabling without review is a safety violation.
+    # ---------------------------------------------------------------------------
+    "therapy_ar": FeatureFlag(
+        name="therapy_ar",
+        enabled=False,
+        description=(
+            "Enable Arabic therapy-style conversations. "
+            "BLOCKED: requires per-language clinical review, "
+            "Arabic crisis detection patterns, Arabic crisis response templates, "
+            "and verified Arabic crisis resource registry entries. (ADR 0003)"
+        ),
+        is_kill_switch=True,
+    ),
+    "therapy_es": FeatureFlag(
+        name="therapy_es",
+        enabled=False,
+        description=(
+            "Enable Spanish therapy-style conversations. "
+            "BLOCKED: requires per-language clinical review. (ADR 0003)"
+        ),
+        is_kill_switch=True,
+    ),
+    "therapy_ja": FeatureFlag(
+        name="therapy_ja",
+        enabled=False,
+        description=(
+            "Enable Japanese therapy-style conversations. "
+            "BLOCKED: requires per-language clinical review. (ADR 0003)"
+        ),
+        is_kill_switch=True,
+    ),
+    "therapy_zh": FeatureFlag(
+        name="therapy_zh",
+        enabled=False,
+        description=(
+            "Enable Simplified Chinese therapy-style conversations. "
+            "BLOCKED: requires per-language clinical review. (ADR 0003)"
+        ),
         is_kill_switch=True,
     ),
 }

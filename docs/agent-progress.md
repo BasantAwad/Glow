@@ -295,3 +295,43 @@ Awaiting user approval on the revised implementation plan and the provision of a
 - **Security, privacy, clinical-safety, and compliance impact:** Massively increased privacy by enforcing local vLLM over HF inference endpoints.
 - **Exact next steps:** Generate the separate decision record for Audio2Face (API version, protobuf, 3D asset, renderer) before beginning Phase 6E.
 - **Continuation point:** Phase 6A-6D configuration is strictly enforced. Ready for Phase 6E planning.
+
+---
+
+## 2026-08-25 — Agent (Antigravity/Claude Sonnet 4.6 Thinking) — TTS License Fix & A2F Decision Record
+
+- **Overall objective:** Build Glow, prioritizing strict privacy, local execution, and real provider integration.
+- **Current phase/task:** Phase 6E pre-gate: TTS license fix and Audio2Face decision record.
+- **Completed work:**
+  - Determined via research that XTTS-v2 (Coqui) **cannot be used commercially**: Coqui Inc. ceased operations Jan 2024, model weights remain under CPML (non-commercial), and no commercial license can be obtained.
+  - Permanently removed XTTS-v2 from `tts_gateway.py`. Replaced with **Kokoro TTS** (`hexgrad/Kokoro-82M`, Apache 2.0), which explicitly permits commercial use.
+  - Documented Arabic language support as **UNRESOLVED**: a community Kokoro Arabic fine-tune must be evaluated and licensed before Arabic therapy sessions can be enabled.
+  - Rewrote `docs/audio2face-decision-record.md` to a fully verified implementation contract with 12 sections and 12+ explicit blockers. Every claim links to a verified source.
+  - Created `tests/test_a2f_gateway_smoke.py`: the gated smoke test fails explicitly when any of the 4 required env vars or SDK packages are missing.
+  - Updated `docs/real-model-configuration.md` to reflect TTS change and A2F BLOCKED status.
+- **Decisions and reasoning:** Research confirmed NVCF endpoint and gRPC protocol. Confirmed ARKit 52-blendshape output schema. Confirmed ReadyPlayerMe is shut down (Jan 2026) and unusable. Confirmed NVIDIA NIM commercial licensing requires NVIDIA AI Enterprise or pay-as-you-go API use.
+- **Assumptions, unresolved:** Multiple legal and technical blockers remain. See `docs/audio2face-decision-record.md` summary table.
+- **Security, privacy, clinical-safety impact:** XTTS-v2 commercial ban is critical for legal compliance. Kokoro TTS privacy behavior is identical (local inference). A2F cloud deployment introduces a legal review requirement for audio transmission.
+- **Exact next steps:** Resolve all blockers in the Audio2Face decision record. Run smoke test against real provider. Do not begin Phase 6E implementation.
+- **Continuation point:** Phase 6E is BLOCKED / PROPOSED. All 18 blockers listed in `docs/audio2face-decision-record.md`.
+
+---
+
+## 2026-08-25 — Agent (Antigravity/Claude Sonnet 4.6 Thinking) — Smoke Test Correction & Decision Record Final Pass
+
+- **Overall objective:** Build Glow, prioritizing strict privacy, local execution, and real provider integration.
+- **Current phase/task:** Phase 6E pre-gate: correcting smoke test design and finalizing decision record.
+- **Completed work:**
+  - Removed synthetic 3-second silence WAV from `test_a2f_gateway_smoke.py`. It violates no-mock policy and cannot prove real facial movement.
+  - Smoke test now requires a **real human-recorded audio fixture** with documented recording consent (`docs/licenses/a2f_smoke_recording_consent.pdf`). Test explicitly rejects silent files via RMS check.
+  - Added `A2F_ENDPOINT` as a required env var (was missing from previous version).
+  - Verified and recorded exact protobuf service/message names from nvidia_pipecat integration: `A2FControllerServiceStub`, `ProcessAudioStream`, `AudioWithEmotion`, `AudioWithEmotionStreamHeader`, `A2F3DAnimationDataStream`.
+  - Validated Kokoro TTS voice file licenses: `af_heart`, `af_sky` and all built-in voices are Apache 2.0 (same repo/license as base model). No separate per-voice license required.
+  - Documented that base Apache 2.0 does NOT automatically cover community Arabic fine-tunes; each must be individually verified.
+  - Completely rewrote `docs/audio2face-decision-record.md` to address all 10 user-specified items with verified facts, specific sources, and explicit blockers. 18 total blockers documented.
+  - Updated `docs/real-model-configuration.md` with Kokoro language status table.
+- **Decisions and reasoning:** Synthetic silence audio cannot produce valid A2F animation output and would not prove the service works correctly. Movement quality must be assessed by human review against the real avatar asset.
+- **Blocker count:** 18 blockers remain across engineering, legal, art, and consent domains.
+- **Security, privacy, clinical-safety impact:** The recording consent requirement protects the engineer's voice. The NVCF legal review protects therapy-session audio. Kokoro Arabic blocker prevents deploying unverified TTS to Arabic-speaking users.
+- **Exact next steps:** Resolve all 18 blockers listed in `docs/audio2face-decision-record.md` blocker summary table. Do not write any Phase 6E production code.
+- **Continuation point:** Phase 6E BLOCKED. `test_a2f_gateway_smoke.py` requires consented fixture + all env vars to run.

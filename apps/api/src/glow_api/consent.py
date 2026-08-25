@@ -83,6 +83,11 @@ class ConsentPurpose(str, Enum):
     # Default: off; must never be bundled with service_use.
     RESEARCH_AND_MODEL_IMPROVEMENT = "research_and_model_improvement"
 
+    # Storing inferred personal facts (long-term memory) across sessions.
+    # Default: off.  Separate opt-in required (ADR 0004).
+    # When revoked, all memory items and their embeddings must be deleted.
+    MEMORY_CONSENT = "memory_consent"
+
 
 # ---------------------------------------------------------------------------
 # Consent record
@@ -133,6 +138,11 @@ class ConsentRecord(BaseModel):
     session_summary: bool = True
     personalisation: bool = False
     research_and_model_improvement: bool = False
+    # Memory consent (ADR 0004) — separate opt-in, never bundled with service_use.
+    # When False, no memory items may be stored or retrieved for this user.
+    # When revoked (changed from True to False), deletion of all memory items
+    # and their embeddings must be triggered by the server before responding.
+    memory_consent: bool = False
 
     @field_validator("locale_presented")
     @classmethod
@@ -207,6 +217,7 @@ class ConsentRecord(BaseModel):
             ConsentPurpose.RESEARCH_AND_MODEL_IMPROVEMENT: (
                 self.research_and_model_improvement
             ),
+            ConsentPurpose.MEMORY_CONSENT: self.memory_consent,
         }
         return mapping[purpose]
 
@@ -235,6 +246,7 @@ class ConsentUpdateRequest(BaseModel):
     session_summary: bool | None = None
     personalisation: bool | None = None
     research_and_model_improvement: bool | None = None
+    memory_consent: bool | None = None
 
     # Locale in which the updated consent was presented.
     locale_presented: Annotated[str, Field(min_length=2, max_length=_MAX_LOCALE_LEN)]
@@ -299,6 +311,7 @@ def apply_consent_update(
             update.research_and_model_improvement,
             current.research_and_model_improvement,
         ),
+        memory_consent=_pick(update.memory_consent, current.memory_consent),
     )
 
 
@@ -313,6 +326,7 @@ def make_initial_consent(
     session_summary: bool = True,
     personalisation: bool = False,
     research_and_model_improvement: bool = False,
+    memory_consent: bool = False,
 ) -> ConsentRecord:
     """Construct the first ConsentRecord for a new user.
 
@@ -331,6 +345,7 @@ def make_initial_consent(
         session_summary: Whether the user accepted session-summary generation.
         personalisation: Whether the user opted into personalisation.
         research_and_model_improvement: Whether the user opted into research use.
+        memory_consent: Whether the user opted into long-term memory (ADR 0004).
 
     Returns:
         A frozen ConsentRecord at record_version=1.
@@ -349,4 +364,5 @@ def make_initial_consent(
         session_summary=session_summary,
         personalisation=personalisation,
         research_and_model_improvement=research_and_model_improvement,
+        memory_consent=memory_consent,
     )

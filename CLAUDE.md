@@ -284,119 +284,256 @@ None of these are assumed HIPAA-eligible, GDPR-compliant, or commercially pre-li
 
 **Stack decided: Python 3.13 / FastAPI backend + Next.js 16 / TypeScript frontend (see ADR 0001).**
 
-This section is derived from what actually exists in the repository as of 2026-08-24 and must be updated whenever the project structure, commands, or conventions change.
+This section reflects the verified repository state as of 2026-08-25 and must be kept current whenever structure, commands, or conventions change.
+
+### Verified environment (2026-08-25)
+
+- **Python:** `.tools/python313/python.exe` = Python 3.13.15 (gitignored local install). All backend commands use this interpreter.
+- **Node:** `node` v22.17.0, `npm` 10.9.2 — available system-wide.
+- **Database (dev):** SQLite via `aiosqlite` at `./glow.db`. **SQLite is local development only.** PostgreSQL is required for any controlled pilot containing real user data.
+- **Database (production/pilot):** PostgreSQL 16+ with `pgvector`. Must be running before semantic memory, RAG, or vector search can be used.
 
 ### Package managers
 
-- **Backend:** `pip` with `pyproject.toml`. Runtime is `.tools/python313/python.exe` (Python 3.13.15, gitignored local install). For CI or fresh environments use any Python 3.13.x and `pip install -e "apps/api[dev]"`.
+- **Backend:** `pip` with `pyproject.toml`. Runtime is `.tools/python313/python.exe`. For CI or fresh environments use any Python 3.13.x and `pip install -e "apps/api[dev]"`.
 - **Frontend:** npm 10.9.2 (`package-lock.json` is committed). Run `npm install` from the repository root.
 
-### Install commands (from repo root)
+### Install commands (run from repository root)
 
 ```powershell
-# Backend — run once per environment
+# Backend — install once per environment
 .tools\python313\Scripts\pip install -e "apps\api[dev]"
 
 # Frontend
 npm install
 ```
 
-### Dev server commands
+### Dev server commands (run from repository root)
 
 ```powershell
-# API (hot-reload)
+# API — with hot-reload
 .tools\python313\Scripts\uvicorn glow_api.main:app --app-dir apps\api\src --reload
 
 # Web
 npm run dev:web
 ```
 
-### Test commands
+### Test commands (run from repository root)
 
 ```powershell
-# All backend tests (pytest + verbose)
-.tools\python313\Scripts\pytest apps\api\tests\ -v
+# All backend tests — verbose, short traceback
+.tools\python313\Scripts\pytest apps\api\tests\ -v --tb=short
 
-# Single backend test
+# Single backend test file
+.tools\python313\Scripts\pytest apps\api\tests\test_health.py -v --tb=short
+
+# Single backend test by name
 .tools\python313\Scripts\pytest apps\api\tests\test_health.py::test_health_check_returns_non_sensitive_process_status -v
+
+# Live provider tests (require real running services)
+# Set ENABLE_LIVE_PROVIDER_TESTS=1 plus any required GLOW_* env vars
+$env:ENABLE_LIVE_PROVIDER_TESTS="1"; .tools\python313\Scripts\pytest apps\api\tests\test_stt_gateway.py -v
 ```
 
-### Type-check / lint commands
+### Type-check / lint commands (run from repository root)
 
 ```powershell
-# Backend — mypy strict
+# Backend — mypy strict (0 errors required to merge)
 .tools\python313\Scripts\mypy --config-file apps\api\pyproject.toml apps\api\src apps\api\tests
 
-# Backend — ruff lint
+# Backend — ruff lint (0 errors required to merge)
 .tools\python313\Scripts\ruff check apps\api\src apps\api\tests
 
-# Frontend — TypeScript
+# Frontend — TypeScript strict
 npm run typecheck:web
 
 # Frontend — ESLint
 npm run lint:web
 ```
 
+### Migration commands (run from repository root)
+
+```powershell
+# Generate new migration from model changes
+.tools\python313\Scripts\alembic -c apps\api\alembic.ini revision --autogenerate -m "description"
+
+# Apply all pending migrations
+.tools\python313\Scripts\alembic -c apps\api\alembic.ini upgrade head
+
+# Roll back one migration
+.tools\python313\Scripts\alembic -c apps\api\alembic.ini downgrade -1
+```
+
+### Full pre-commit verification (run from repository root)
+
+```powershell
+.tools\python313\Scripts\pytest apps\api\tests\ -v --tb=short
+.tools\python313\Scripts\mypy --config-file apps\api\pyproject.toml apps\api\src apps\api\tests
+.tools\python313\Scripts\ruff check apps\api\src apps\api\tests
+npm run typecheck:web
+npm run lint:web
+```
+
 ### Environment variables
 
-Prefix: `GLOW_`. See `.env.example` for the full list. Never commit `.env` or any secret value. Variables:
+All variables use the `GLOW_` prefix. See `.env.example` for the complete list. **Never commit `.env` or any secret value.**
 
-| Variable | Default | Description |
-|---|---|---|
-| `GLOW_ENVIRONMENT` | `development` | `development` \| `test` \| `production` |
-| `GLOW_SERVICE_NAME` | `glow-api` | Appears in `/healthz` and structured logs |
+| Variable | Default | Required for | Description |
+|---|---|---|---|
+| `GLOW_ENVIRONMENT` | `development` | Always | `development` \| `test` \| `production` |
+| `GLOW_SERVICE_NAME` | `glow-api` | Always | Appears in `/healthz` and structured logs |
+| `GLOW_DATABASE_URL` | `sqlite+aiosqlite:///./glow.db` | Phase 1 | Full DB URL. SQLite for dev only; PostgreSQL for pilot/production |
+| `GLOW_AUTH_SECRET_KEY` | — | Phase 1 (auth) | HMAC-SHA256 key for Glow-signed JWTs. **Required for any protected route**. Min 32 bytes hex |
+| `GLOW_AUTH_SECRET_KEY_V2` | — | Key rotation | New key during rotation. Server accepts both; issues with V2 |
+| `GLOW_MASTER_KEY` | — | Phase 5 (KMS) | AES-256 envelope encryption master key. Hex-encoded 32 bytes. KMS service required for production |
+| `GLOW_MASTER_KEY_V2` | — | Key rotation | New encryption key during rotation |
+| `GLOW_LLM_API_BASE` | — | Phase 6A | OpenAI-compatible base URL for vLLM (e.g. `http://localhost:8000/v1`) |
+| `GLOW_LLM_API_KEY` | — | Phase 6A | API key for vLLM if auth is enabled |
+| `GLOW_LLM_MODEL_ID` | `Qwen/Qwen2.5-14B-Instruct` | Phase 6A | Exact model ID served by vLLM |
+| `GLOW_NVIDIA_API_KEY` | — | Phase 10 (A2F) | NVIDIA Cloud Functions API key for Audio2Face-3D |
+| `GLOW_HF_TOKEN` | — | Optional | Hugging Face token for model downloads |
+| `WHISPER_MODEL_SIZE` | `large-v3` | Phase 6B | Faster-Whisper model size override |
+| `WHISPER_DEVICE` | `auto` | Phase 6B | `cuda` \| `cpu` \| `auto` |
+| `ENABLE_LIVE_PROVIDER_TESTS` | — | Test gate | Set to `1` to run tests that call real providers |
 
-Phase 1+ will add `GLOW_DATABASE_URL`, `GLOW_AUTH_*`, Phase 3+ `GLOW_MODEL_*` — see `.env.example`.
-
-### Source directory structure
+### Source directory structure (as of 2026-08-25)
 
 ```
 apps/
   api/
-    pyproject.toml         — backend project manifest and tool config
-    src/glow_api/          — all backend source (import root)
-      main.py              — FastAPI app factory
-      settings.py          — typed env-var settings
-      consent.py           — Phase 1 consent model (types only; no DB yet)
-    tests/                 — pytest tests (mirrors src structure)
+    pyproject.toml              — backend project manifest and tool config
+    alembic.ini                 — Alembic migration config
+    src/glow_api/
+      main.py                   — FastAPI app factory
+      settings.py               — typed env-var settings (GLOW_ prefix)
+      auth.py                   — auth provider interface
+      auth_providers/
+        glow_jwt.py             — Glow-owned HMAC-SHA256 signed JWT provider
+      consent.py                — consent model and purposes (Phase 1)
+      user.py                   — user account and preferences model
+      session.py                — session lifecycle FSM (Phase 2)
+      safety.py                 — safety control plane + CrisisFSM (Phase 2/3)
+      orchestrator.py           — session orchestrator (Phase 2/3)
+      policy.py                 — conversation policy engine
+      evidence.py               — RAG / evidence registry (Phase 4)
+      privacy.py                — privacy + deletion + export (Phase 5)
+      model_gateway.py          — LLM provider abstraction (Phase 6A)
+      stt_gateway.py            — STT provider abstraction (Phase 6B)
+      tts_gateway.py            — TTS provider abstraction (Phase 6C)
+      memory.py                 — consent-based long-term memory (Phase 7)
+      notes.py                  — AI notes and session summaries (Phase 8)
+      assessment.py             — non-diagnostic screening (Phase 9)
+      audio2face.py             — A2F stub (Phase 10, BLOCKED)
+      billing.py                — billing entitlement engine (Phase 11)
+      admin.py                  — feature flags, health checks, incident log (Phase 12)
+      models.py                 — SQLAlchemy ORM models
+      database.py               — async session factory
+      dependencies.py           — FastAPI dependency injectors
+      errors.py                 — typed error hierarchy
+      crypto.py                 — envelope encryption
+      kms.py                    — key management interface
+      logging.py                — structured logging configuration
+      routers/
+        session_router.py       — session + voice endpoints
+        memory_router.py        — memory CRUD endpoints (Phase 7)
+        notes_router.py         — notes + summary endpoints (Phase 8)
+        assessment_router.py    — screening endpoints (Phase 9)
+        billing_router.py       — billing + webhook endpoints (Phase 11)
+        avatar.py               — avatar stub router
+    tests/
+      conftest.py               — shared test fixtures
+      test_health.py            — health check tests
+      test_consent.py           — consent model tests
+      test_orchestrator.py      — session orchestrator tests
+      test_privacy.py           — deletion and export tests
+      test_model_gateway.py     — LLM gateway tests (live-gated)
+      test_stt_gateway.py       — STT gateway tests (live-gated)
+      test_tts_gateway.py       — TTS gateway tests (live-gated)
+      test_voice_websocket.py   — voice WebSocket tests
+      test_a2f_gateway_smoke.py — A2F smoke test (live-gated, BLOCKED)
+      test_auth.py              — auth provider tests (Phase 1)
+      test_memory.py            — memory service tests (Phase 7)
+      test_notes.py             — notes service tests (Phase 8)
+      test_assessment.py        — screening tests (Phase 9)
+      test_billing.py           — billing entitlement tests (Phase 11)
   web/
-    package.json           — Next.js app
-    app/                   — Next.js App Router pages and layouts
-    tsconfig.json          — strict TypeScript config
+    package.json                — Next.js app
+    app/                        — Next.js App Router pages and layouts
+    tsconfig.json               — strict TypeScript config
 docs/
-  adr/                     — Architecture Decision Records
-  agent-progress.md        — Per-session AI agent log (always update)
-  repository-status.md     — Current state and backlog
-package.json               — npm workspaces root
+  adr/                          — Architecture Decision Records
+    0001-initial-stack.md
+    0002-auth-strategy.md
+    0003-language-scope.md
+    0004-memory-consent.md
+  agent-progress.md             — Per-session AI agent log (always update)
+  repository-status.md          — Current state and backlog
+  model-provider-decision.md    — LLM/STT/TTS provider decisions
+  real-model-configuration.md   — Live provider status
+  audio2face-decision-record.md — A2F decision + blockers
+  launch-checklist.md           — External review gates (all BLOCKED)
+  incident-response.md          — Incident response procedures
+package.json                    — npm workspaces root
+.env.example                    — All GLOW_ variables documented
 ```
 
 ### API conventions
 
-- All API endpoints are under `apps/api/src/glow_api/`.
+- All API endpoints are under `apps/api/src/glow_api/routers/`.
 - Routes use `APIRouter`; routers are registered in `create_app()` in `main.py`.
-- Every endpoint must use a typed Pydantic `response_model`. No dict returns.
-- Privileged safety, consent, session-policy, and entitlement decisions are server-side only. Clients are never trusted for these.
+- Every endpoint must use a typed Pydantic `response_model`. No `dict` returns.
+- Privileged safety, consent, session-policy, entitlement, and memory decisions are **server-side only**.
 - Docs/OpenAPI routes are disabled (`docs_url=None`, `redoc_url=None`, `openapi_url=None`).
+- Every protected endpoint requires a valid, non-expired Glow-signed JWT bearer token.
+- Every memory/notes/assessment endpoint requires that the user's `memory_consent` is active.
 
-### Auth conventions (Phase 1+, provider not yet selected)
+### Authentication conventions
 
-- All auth logic must be behind a provider-neutral adapter in `glow_api/auth.py`.
+- Auth is implemented as a provider-neutral adapter in `glow_api/auth.py`.
+- The concrete implementation is `glow_api/auth_providers/glow_jwt.py` — a Glow-owned HMAC-SHA256 signed JWT service.
+- **No development-only bypass, mock principal, stub JWT, or hardcoded user may appear in production code paths.**
+- When `GLOW_AUTH_SECRET_KEY` is not set, all protected endpoints fail with `ProviderNotConfiguredError` (503).
+- Key rotation: `GLOW_AUTH_SECRET_KEY_V2` is the new key; the server accepts tokens signed by either key and issues new tokens with V2.
 - No endpoint beyond `/healthz` may be called without a valid authenticated identity and service-use consent.
-- Session tokens are short-lived; device/session tracking is server-side.
+- Session tokens expire in 1 hour. Refresh tokens are not yet implemented.
+
+### Language scope restrictions
+
+- **English** is the only language approved for therapy-style conversations (all risk tiers).
+- **Arabic, Spanish, Japanese, Simplified Chinese**: only allowed in informational modes. Therapy-style and crisis-detection responses in these languages are **BLOCKED** until separate qualified clinical review is complete per language.
+- The feature flags `therapy_ar`, `therapy_es`, `therapy_ja`, `therapy_zh` default to `disabled`.
+- The UI must not present voice/avatar features as available unless real providers are live-tested.
+- Safety response templates in non-English languages must be clinician-reviewed before use.
+
+### Key management requirements
+
+- **Development:** `GLOW_MASTER_KEY` is a hex-encoded 32-byte AES key in `.env` (gitignored).
+- **Production/pilot:** A managed KMS service (AWS KMS, GCP Cloud KMS, or Azure Key Vault) is required. No raw key material in environment variables in production.
+- Envelope encryption: every encrypted field stores `[key_version][nonce][ciphertext]` — the key version enables key rotation without re-encrypting all data immediately.
+- Key IDs and key versions may appear in structured logs; key material must never appear in any log.
+- On key rotation: new data encrypted with new key; old data re-encrypted during migration window.
+
+### No-mock / no-stub enforcement
+
+- **Never** add a mock, stub, fake provider, canned response, synthetic dataset, fabricated clinical resource, or invented crisis number to any production code path.
+- If a provider is not configured, raise `ProviderNotConfiguredError` explicitly.
+- Test doubles (`FakeModelGateway`, test auth tokens) are allowed **only** in test files, and only when they are clearly marked and gated by `ENABLE_LIVE_PROVIDER_TESTS=0` or test-only fixtures.
+- The WebSocket voice handler must authenticate the user through the real auth pipeline; no hardcoded user or consent objects.
 
 ### Error-handling conventions
 
-- Use typed exception classes; never leak raw exception messages to API responses.
+- Use typed exception classes (`glow_api/errors.py`); never leak raw exception messages to API responses.
 - Never include raw therapy content, user identifiers, or auth credentials in log lines.
 - Safety, auth, billing, and data-deletion errors must not be swallowed — surface and log them.
 
 ### Logging/observability conventions
 
 - Structured JSON logs only. No raw transcript content in any log line.
-- Safety audit events go to a restricted, access-controlled audit store (Phase 3+).
-- Standard logs must be redacted of any PII or session content before emission.
+- Safety audit events go to the restricted, access-controlled audit store (`safety_audit_events` table).
+- Standard logs must pass through `redact_log_line()` before emission.
+- Memory item content, embedding vectors, and therapy transcript fragments must never appear in logs.
 
-### Migration workflow (Phase 1+, when DB is added)
+### Migration workflow (run from repository root)
 
 ```powershell
 # Generate migration
@@ -404,16 +541,6 @@ package.json               — npm workspaces root
 
 # Apply migrations
 .tools\python313\Scripts\alembic -c apps\api\alembic.ini upgrade head
-```
-
-### Verify a change before committing
-
-```powershell
-.tools\python313\Scripts\pytest apps\api\tests\ -v
-.tools\python313\Scripts\mypy --config-file apps\api\pyproject.toml apps\api\src apps\api\tests
-.tools\python313\Scripts\ruff check apps\api\src apps\api\tests
-npm run typecheck:web
-npm run lint:web
 ```
 
 

@@ -14,7 +14,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from glow_api.auth import AuthPrincipal, AuthProvider, UnconfiguredAuthProvider
+from glow_api.auth import AuthPrincipal, AuthProvider
+from glow_api.auth_providers.glow_jwt import GlowSignedJwtAuthProvider
 from glow_api.consent import ConsentRecord
 from glow_api.database import get_db_session
 from glow_api.errors import AuthenticationError, NotFoundError
@@ -25,15 +26,19 @@ from glow_api.user import AccessibilityFlag, UserAccount, UserPreferences
 # Auth Provider
 # ---------------------------------------------------------------------------
 
-# Global instance of the active auth provider.
-# Until ADR 0001 selects a real provider, this remains UnconfiguredAuthProvider,
-# which will reject all tokens with ProviderNotConfiguredError (503).
-_AUTH_PROVIDER: AuthProvider = UnconfiguredAuthProvider()
-
 
 def get_auth_provider() -> AuthProvider:
-    """Return the active authentication provider."""
-    return _AUTH_PROVIDER
+    """Return the active authentication provider.
+
+    Creates a new GlowSignedJwtAuthProvider on each call (reads GLOW_AUTH_SECRET_KEY
+    from the environment at call time).  This is intentionally not cached at
+    module level so that tests can monkeypatch env vars between calls.
+
+    In production the provider is stateless enough that per-request construction
+    is acceptable overhead. If profiling shows otherwise, cache with an env-var
+    fingerprint as the cache key.
+    """
+    return GlowSignedJwtAuthProvider()
 
 
 # ---------------------------------------------------------------------------
@@ -132,6 +137,7 @@ async def get_current_consent(
         raise NotFoundError(detail="Consent record not found.")
 
     return ConsentRecord(
+        user_id=principal.user_id,
         record_version=model.record_version,
         recorded_at=model.recorded_at,
         policy_version=model.policy_version,

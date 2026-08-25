@@ -263,11 +263,14 @@ class OpenWeightsModelGateway(ModelGateway):
         except httpx.HTTPError as e:
             raise RuntimeError(f"Model provider stream request failed: {e}") from e
 
-# Global active gateway
+# Gateway factory — lazy, called at dependency-injection time (not at import time).
+# Never call this at module level; doing so crashes when settings fields are absent.
 def get_model_gateway() -> ModelGateway:
+    """Return a configured ModelGateway, or UnconfiguredModelGateway if GLOW_LLM_API_BASE is not set.
+
+    Always call this at request time (via FastAPI Depends), never at module level.
+    """
     from glow_api.settings import settings
     if settings.llm_api_base:
         return OpenWeightsModelGateway()
     return UnconfiguredModelGateway()
-
-model_gateway = get_model_gateway()
