@@ -335,3 +335,29 @@ Awaiting user approval on the revised implementation plan and the provision of a
 - **Security, privacy, clinical-safety impact:** The recording consent requirement protects the engineer's voice. The NVCF legal review protects therapy-session audio. Kokoro Arabic blocker prevents deploying unverified TTS to Arabic-speaking users.
 - **Exact next steps:** Resolve all 18 blockers listed in `docs/audio2face-decision-record.md` blocker summary table. Do not write any Phase 6E production code.
 - **Continuation point:** Phase 6E BLOCKED. `test_a2f_gateway_smoke.py` requires consented fixture + all env vars to run.
+
+## 2026-08-25 — Agent (Antigravity/Claude Sonnet 4.6 Thinking) — Establishment of empirical baseline
+
+- **Overall objective:** Build Glow, prioritizing strict privacy, local execution, and real provider integration.
+- **Current phase/task:** Step 1: Baseline and Test Classification.
+- **Completed work:** 
+  - Ran \pytest\ and correctly classified the 62 tests into deterministic unit tests and live provider contract tests.
+  - Rewrote \	est_stt_gateway.py\ and \	est_voice_websocket.py\ to strictly require a real human-recorded technical sentence with documented consent (\ixtures/stt_smoke_sentence_16k_mono.wav\). Removed synthetic audio generation (e.g. \_make_silence_wav_1s\).
+  - Updated \docs/repository-status.md\ with the empirical test results and counts.
+- **Security, privacy, clinical-safety, and compliance impact:** Enforced the strict no-mock policy by completely blocking the live voice testing pathway until a verified human audio fixture is available.
+- **Exact next steps:** Fix existing repository failures and ensure production paths fail clearly if auth/DB/LLM are unconfigured (Step 2). Then proceed to PostgreSQL Alembic migrations (Step 4).
+
+ # #   2 0 2 6 - 0 8 - 2 5      A g e n t   ( A n t i g r a v i t y / C l a u d e   S o n n e t   4 . 6   T h i n k i n g )      C o n f i g u r a t i o n   A u d i t   &   E n f o r c e m e n t 
+ 
+ -   * * O v e r a l l   o b j e c t i v e : * *   B u i l d   G l o w ,   p r i o r i t i z i n g   s t r i c t   p r i v a c y ,   l o c a l   e x e c u t i o n ,   a n d   r e a l   p r o v i d e r   i n t e g r a t i o n . 
+ -   * * C u r r e n t   p h a s e / t a s k : * *   C o n f i g u r a t i o n   A u d i t   a n d   S t r i c t   T e s t i n g   E n f o r c e m e n t 
+ -   * * C o m p l e t e d   w o r k : * * 
+     -   A u d i t e d   l o c a l   e n v i r o n m e n t   f o r   e x p o s e d   s e c r e t s ;   v e r i f i e d   n o n e   e x p o s e d   a n d   . e n v   c o r r e c t l y   g i t i g n o r e d . 
+     -   E n f o r c e d   G L O W _   p r e f i x   f o r   a l l   e n v i r o n m e n t   v a r i a b l e s   ( e . g . ,   G L O W _ S T T _ M O D E L _ I D ,   G L O W _ T T S _ V O I C E _ I D ,   G L O W _ N V I D I A _ A P I _ K E Y ) . 
+     -   U p d a t e d   . e n v . e x a m p l e ,   s e t t i n g s . p y ,   C L A U D E . m d ,   a n d   r e a l - m o d e l - c o n f i g u r a t i o n . m d   t o   u s e   e x a c t   s t a t u s e s   ( m i s s i n g ,   u n r e a c h a b l e ,   b l o c k e d ,   p r e s e n t _ n o n _ p l a c e h o l d e r ) . 
+     -   V e r i f i e d   v L L M   i s   u n r e a c h a b l e   l o c a l l y   a n d   d o c u m e n t e d   s t a t u s   a s   b l o c k e d / u n r e a c h a b l e . 
+     -   M o d i f i e d   l i v e - p r o v i d e r   t e s t s   t o   f a i l   e x p l i c i t l y   r a t h e r   t h a n   s k i p   s i l e n t l y   w h e n   E N A B L E _ L I V E _ P R O V I D E R _ T E S T S = 1   b u t   p r o v i d e r s   a r e   u n c o n f i g u r e d . 
+ -   * * C o m m a n d s / r e s u l t s : * *   g i t   d i f f   c h e c k s   c o n f i r m e d   n o   s e c r e t s   e x p o s e d .   P y t e s t   r u n   c o n f i r m e d   d e t e r m i n i s t i c   t e s t s   p a s s ,   w h i l e   l i v e   t e s t s   f a i l   e x p l i c i t l y   d u e   t o   m i s s i n g   c o n f i g u r a t i o n s . 
+ -   * * E x a c t   n e x t   s t e p s : * *   P r e s e n t   f i n d i n g s   t o   t h e   u s e r   a n d   a w a i t   i n s t r u c t i o n   b e f o r e   a t t e m p t i n g   A v a t a r ,   P o s t g r e s ,   o r   A u t h   c h a n g e s . 
+  
+ 

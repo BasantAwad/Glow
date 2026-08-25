@@ -392,8 +392,11 @@ All variables use the `GLOW_` prefix. See `.env.example` for the complete list. 
 | `GLOW_LLM_MODEL_ID` | `Qwen/Qwen2.5-14B-Instruct` | Phase 6A | Exact model ID served by vLLM |
 | `GLOW_NVIDIA_API_KEY` | — | Phase 10 (A2F) | NVIDIA Cloud Functions API key for Audio2Face-3D |
 | `GLOW_HF_TOKEN` | — | Optional | Hugging Face token for model downloads |
-| `WHISPER_MODEL_SIZE` | `large-v3` | Phase 6B | Faster-Whisper model size override |
-| `WHISPER_DEVICE` | `auto` | Phase 6B | `cuda` \| `cpu` \| `auto` |
+| `GLOW_STT_MODEL_ID` | `large-v3` | Phase 6B | Faster-Whisper model size override |
+| `GLOW_STT_DEVICE` | `auto` | Phase 6B | `cuda` \| `cpu` \| `auto` |
+| `GLOW_STT_COMPUTE_TYPE` | `auto` | Phase 6B | `float16` \| `int8` \| `default` |
+| `GLOW_TTS_MODEL_ID` | `hexgrad/Kokoro-82M` | Phase 6C | Kokoro TTS model checkpoint |
+| `GLOW_TTS_VOICE_ID` | `af_heart` | Phase 6C | Default voice persona for Kokoro |
 | `ENABLE_LIVE_PROVIDER_TESTS` | — | Test gate | Set to `1` to run tests that call real providers |
 
 ### Source directory structure (as of 2026-08-25)

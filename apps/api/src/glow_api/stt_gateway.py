@@ -20,9 +20,9 @@ Model Selection Policy:
     4. Raise a clear RuntimeError with instructions — if even CPU fails
 
   The fallback chain is configurable via environment variables:
-    WHISPER_MODEL_SIZE  — override the starting model size (default: large-v3)
-    WHISPER_DEVICE      — override the device ('cuda', 'cpu', 'auto'; default: auto)
-    WHISPER_COMPUTE_TYPE — override compute type ('float16', 'int8', 'default'; default: auto)
+    GLOW_STT_MODEL_ID    — override the starting model size (default: large-v3)
+    GLOW_STT_DEVICE      — override the device ('cuda', 'cpu', 'auto'; default: auto)
+    GLOW_STT_COMPUTE_TYPE — override compute type ('float16', 'int8', 'default'; default: auto)
 """
 
 from __future__ import annotations
@@ -209,8 +209,8 @@ def _load_whisper_with_fallback(preferred_model: str, preferred_device: str, pre
         "faster-whisper: all model fallbacks exhausted. "
         f"Last error: {last_error}\n"
         "Options:\n"
-        "  - Set WHISPER_DEVICE=cpu to force CPU inference.\n"
-        "  - Set WHISPER_MODEL_SIZE=small for a smaller model.\n"
+        "  - Set GLOW_STT_DEVICE=cpu to force CPU inference.\n"
+        "  - Set GLOW_STT_MODEL_ID=small for a smaller model.\n"
         "  - Free GPU VRAM and retry."
     ) from last_error
 
@@ -222,9 +222,9 @@ class FasterWhisperSttGateway(SttGateway):
     if the primary model size causes a CUDA out-of-memory error.
 
     Configuration (env vars, all optional):
-        WHISPER_MODEL_SIZE   default: large-v3
-        WHISPER_DEVICE       default: auto  ('cuda', 'cpu', 'auto')
-        WHISPER_COMPUTE_TYPE default: auto  ('float16', 'int8', 'default')
+        GLOW_STT_MODEL_ID    default: large-v3
+        GLOW_STT_DEVICE      default: auto  ('cuda', 'cpu', 'auto')
+        GLOW_STT_COMPUTE_TYPE default: auto  ('float16', 'int8', 'default')
     """
 
     def __init__(
@@ -233,9 +233,10 @@ class FasterWhisperSttGateway(SttGateway):
         device: str | None = None,
         compute_type: str | None = None,
     ):
-        self.model_size = model_size or os.environ.get("WHISPER_MODEL_SIZE", "large-v3")
-        self.device = device or os.environ.get("WHISPER_DEVICE", "auto")
-        self.compute_type = compute_type or os.environ.get("WHISPER_COMPUTE_TYPE", "auto")
+        from glow_api.settings import settings
+        self.model_size = model_size or settings.stt_model_id or "large-v3"
+        self.device = device or settings.stt_device
+        self.compute_type = compute_type or settings.stt_compute_type
         self._model = None
         self._active_model_id: str = "not-loaded"
 
@@ -296,8 +297,8 @@ class FasterWhisperSttGateway(SttGateway):
         except Exception as exc:
             raise RuntimeError(
                 f"Transcription failed: {exc}\n"
-                "If this is a CUDA out-of-memory error, set WHISPER_DEVICE=cpu "
-                "or WHISPER_MODEL_SIZE=small and restart the server."
+                "If this is a CUDA out-of-memory error, set GLOW_STT_DEVICE=cpu "
+                "or GLOW_STT_MODEL_ID=small and restart the server."
             ) from exc
 
         latency_ms = (time.perf_counter() - start_time) * 1000.0
@@ -339,7 +340,7 @@ class FasterWhisperSttGateway(SttGateway):
 def get_stt_gateway() -> SttGateway:
     """Factory: returns a FasterWhisperSttGateway.
 
-    Model size and device are controlled via WHISPER_MODEL_SIZE and WHISPER_DEVICE
+    Model size and device are controlled via GLOW_STT_MODEL_ID and GLOW_STT_DEVICE
     environment variables. On CUDA OOM the gateway automatically falls back to
     smaller models or CPU. See module docstring for the full fallback chain.
     """

@@ -1,33 +1,30 @@
+import os
 import pytest
 from glow_api.stt_gateway import FasterWhisperSttGateway, TranscriptionRequest
 
 @pytest.mark.asyncio
 async def test_faster_whisper_stt_gateway_contract():
-    # Only test if faster-whisper is installed
+    if os.environ.get("ENABLE_LIVE_PROVIDER_TESTS") != "1":
+        pytest.skip("Live provider tests not enabled.")
+        
     try:
         import faster_whisper
     except ImportError:
-        pytest.skip("faster-whisper is not installed, skipping real provider test.")
+        pytest.fail("faster-whisper is not installed.")
 
-    # We use the tiny model for tests so we don't download 3GB of large-v3 in the pipeline
+    fixture_path = os.path.join(os.path.dirname(__file__), "fixtures", "stt_smoke_sentence_16k_mono.wav")
+    if not os.path.exists(fixture_path):
+        pytest.fail(
+            "Live STT test BLOCKED.\n"
+            "Required: A real short human-recorded technical sentence (16kHz PCM mono).\n"
+            "Do NOT use synthetic audio or silent WAVs."
+        )
+
     gateway = FasterWhisperSttGateway(model_size="tiny", device="cpu", compute_type="int8")
     assert gateway.is_configured
 
-    # Generate a simple 1 second silent/noise WAV file in memory
-    import io
-    import wave
-    import struct
-
-    buffer = io.BytesIO()
-    with wave.open(buffer, 'wb') as wav:
-        wav.setnchannels(1)
-        wav.setsampwidth(2)
-        wav.setframerate(16000)
-        # Write 16000 samples of 0
-        for _ in range(16000):
-            wav.writeframes(struct.pack('<h', 0))
-
-    audio_bytes = buffer.getvalue()
+    with open(fixture_path, "rb") as f:
+        audio_bytes = f.read()
 
     req = TranscriptionRequest(
         session_id="test_stt_1",
@@ -39,41 +36,38 @@ async def test_faster_whisper_stt_gateway_contract():
     resp = await gateway.transcribe(req)
     assert resp.is_partial is False
     assert resp.latency_ms > 0
-    # Whisper might transcribe silence as empty string or hallucinatory text,
-    # but we just assert it returns a valid structure.
     assert isinstance(resp.text, str)
     assert 0.0 <= resp.confidence <= 1.0
 
+
 @pytest.mark.asyncio
 async def test_faster_whisper_stream():
+    if os.environ.get("ENABLE_LIVE_PROVIDER_TESTS") != "1":
+        pytest.skip("Live provider tests not enabled.")
+
     try:
         import faster_whisper
     except ImportError:
-        pytest.skip("faster-whisper is not installed, skipping real provider test.")
+        pytest.fail("faster-whisper is not installed.")
         
+    fixture_path = os.path.join(os.path.dirname(__file__), "fixtures", "stt_smoke_sentence_16k_mono.wav")
+    if not os.path.exists(fixture_path):
+        pytest.fail("Live STT stream test BLOCKED (missing real audio fixture).")
+
     gateway = FasterWhisperSttGateway(model_size="tiny", device="cpu", compute_type="int8")
 
-    import io
-    import wave
-    import struct
+    with open(fixture_path, "rb") as f:
+        audio_bytes = f.read()
 
-    buffer = io.BytesIO()
-    with wave.open(buffer, 'wb') as wav:
-        wav.setnchannels(1)
-        wav.setsampwidth(2)
-        wav.setframerate(16000)
-        for _ in range(16000):
-            wav.writeframes(struct.pack('<h', 0))
-
-    audio_bytes = buffer.getvalue()
-
-    async def mock_audio_stream():
-        yield audio_bytes[:len(audio_bytes)//2]
-        yield audio_bytes[len(audio_bytes)//2:]
+    async def real_audio_stream():
+        # Yield the real file in chunks
+        chunk_size = len(audio_bytes) // 2
+        yield audio_bytes[:chunk_size]
+        yield audio_bytes[chunk_size:]
 
     chunks = []
-    async for resp in gateway.stream("test_stream", mock_audio_stream(), "en"):
+    async for resp in gateway.stream("test_stream", real_audio_stream(), "en"):
         chunks.append(resp)
 
-    assert len(chunks) == 1
-    assert chunks[0].is_partial is False
+    assert len(chunks) > 0
+    assert chunks[-1].is_partial is False

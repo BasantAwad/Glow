@@ -37,10 +37,10 @@ FIXTURE POLICY (non-negotiable):
 
 This test runs ONLY when ALL of the following are true:
   ENABLE_LIVE_PROVIDER_TESTS=1        (env var)
-  NVIDIA_API_KEY=<non-empty>          (env var)
-  A2F_FUNCTION_ID=<non-empty>         (env var — retrieve from
+  GLOW_NVIDIA_API_KEY=<non-empty>          (env var)
+  GLOW_A2F_FUNCTION_ID=<non-empty>         (env var — retrieve from
                                        https://build.nvidia.com/nvidia/audio2face-3d)
-  A2F_ENDPOINT=<host:port>            (env var, e.g. grpc.nvcf.nvidia.com:443)
+  GLOW_A2F_ENDPOINT=<host:port>            (env var, e.g. grpc.nvcf.nvidia.com:443)
   fixture file exists at the path above
 
 If any prerequisite is missing, the test FAILS EXPLICITLY with a
@@ -85,7 +85,7 @@ def _check_all_prerequisites() -> list[str]:
             "Set it explicitly to opt in to live provider tests."
         )
 
-    for var in ("NVIDIA_API_KEY", "A2F_FUNCTION_ID", "A2F_ENDPOINT"):
+    for var in ("GLOW_NVIDIA_API_KEY", "GLOW_A2F_FUNCTION_ID", "GLOW_A2F_ENDPOINT"):
         if not os.environ.get(var, "").strip():
             failures.append(
                 f"{var} environment variable is missing or empty. "
@@ -192,9 +192,9 @@ async def test_a2f_gateway_smoke():
     import grpc
     from nvidia_audio2face_3d import audio2face_pb2_grpc, messages_pb2
 
-    api_key = os.environ["NVIDIA_API_KEY"]
-    function_id = os.environ["A2F_FUNCTION_ID"]
-    endpoint = os.environ["A2F_ENDPOINT"]
+    api_key = os.environ["GLOW_NVIDIA_API_KEY"]
+    function_id = os.environ["GLOW_A2F_FUNCTION_ID"]
+    endpoint = os.environ["GLOW_A2F_ENDPOINT"]
 
     audio_bytes = FIXTURE_PATH.read_bytes()
 
@@ -259,7 +259,7 @@ async def test_a2f_gateway_smoke():
     except grpc.RpcError as exc:
         pytest.fail(
             f"gRPC call to Audio2Face-3D failed: {exc.code()} — {exc.details()}\n"
-            "Check NVIDIA_API_KEY, A2F_FUNCTION_ID, and A2F_ENDPOINT."
+            "Check GLOW_NVIDIA_API_KEY, GLOW_A2F_FUNCTION_ID, and GLOW_A2F_ENDPOINT."
         )
     finally:
         channel.close()

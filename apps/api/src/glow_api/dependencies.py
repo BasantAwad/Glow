@@ -88,11 +88,13 @@ async def get_current_user(
     if model is None:
         raise NotFoundError(detail="User account not found.")
 
+    from glow_api.user import UserLocale, SessionMode, AvatarDisclosurePreference, InputModality
+    
     prefs = UserPreferences(
-        locale=model.preferences.locale,
-        session_mode=model.preferences.session_mode,
-        avatar_disclosure=model.preferences.avatar_disclosure,
-        input_modality=model.preferences.input_modality,
+        locale=UserLocale(model.preferences.locale.value if hasattr(model.preferences.locale, "value") else str(model.preferences.locale)),
+        session_mode=SessionMode(model.preferences.session_mode.value if hasattr(model.preferences.session_mode, "value") else str(model.preferences.session_mode)),
+        avatar_disclosure=AvatarDisclosurePreference(model.preferences.avatar_disclosure.value if hasattr(model.preferences.avatar_disclosure, "value") else str(model.preferences.avatar_disclosure)),
+        input_modality=InputModality(model.preferences.input_modality.value if hasattr(model.preferences.input_modality, "value") else str(model.preferences.input_modality)),
         persona_name=model.preferences.persona_name,
         accessibility=frozenset(AccessibilityFlag(x) for x in model.preferences.accessibility),
         preferred_session_minutes=model.preferences.preferred_session_minutes,
@@ -149,4 +151,5 @@ async def get_current_consent(
         session_summary=model.session_summary,
         personalisation=model.personalisation,
         research_and_model_improvement=model.research_and_model_improvement,
+        memory_consent=getattr(model, "memory_consent", False),
     )

@@ -208,22 +208,28 @@ All 18 blockers in `docs/audio2face-decision-record.md` must be resolved. No pro
 pytest apps/api/tests/ -v --tb=short
 ```
 
-| Test File | Status (pre-fix) | Status (post-fix) |
+**Total tests collected:** 62
+**Deterministic unit tests:** 55 (Pass)
+**Live provider contract tests:** 6 (Correctly block/fail or skip based on ENABLE_LIVE_PROVIDER_TESTS)
+**End-to-End tests:** 1 (skip/fail)
+**Integration tests (PostgreSQL):** 0 (Not implemented yet)
+
+| Test File | Status | Classification |
 |---|---|---|
-| `test_health.py` | ❌ IMPORT ERROR (settings) | ✅ PASSING |
-| `test_consent.py` | ✅ PASSING | ✅ PASSING |
-| `test_orchestrator.py` | ❌ IMPORT ERROR (settings) | ✅ PASSING |
-| `test_privacy.py` | ❌ IMPORT ERROR (settings) | ✅ PASSING |
-| `test_model_gateway.py` | ❌ IMPORT ERROR (settings) | ✅ PASSING (unit); 🔴 LIVE BLOCKED |
-| `test_voice_websocket.py` | ❌ IMPORT ERROR (settings) | ✅ PASSING (unit) |
-| `test_auth.py` | ❌ NOT EXISTED | ✅ NEW |
-| `test_memory.py` | ❌ NOT EXISTED | ✅ NEW |
-| `test_notes.py` | ❌ NOT EXISTED | ✅ NEW |
-| `test_assessment.py` | ❌ NOT EXISTED | ✅ NEW |
-| `test_billing.py` | ❌ NOT EXISTED | ✅ NEW |
-| `test_stt_gateway.py` | ✅ (gated) | ✅ (gated, 🔴 LIVE BLOCKED) |
-| `test_tts_gateway.py` | ✅ (gated) | ✅ (gated, 🔴 LIVE BLOCKED) |
-| `test_a2f_gateway_smoke.py` | ✅ (gated) | ✅ (gated, 🔴 BLOCKED) |
+| `test_health.py` | ✅ PASSING | Deterministic Unit |
+| `test_consent.py` | ✅ PASSING (34) | Deterministic Unit |
+| `test_orchestrator.py` | ✅ PASSING (3) | Deterministic Unit |
+| `test_privacy.py` | ✅ PASSING (1) | Deterministic Unit |
+| `test_auth.py` | ✅ PASSING (16) | Deterministic Unit |
+| `test_model_gateway.py` | 🔴 BLOCKED/FAILING (2) | Live Provider Contract |
+| `test_voice_websocket.py` | 🔴 BLOCKED/FAILING (1) | End-to-End |
+| `test_memory.py` | ❌ NOT EXISTED | Integration (Pending) |
+| `test_notes.py` | ❌ NOT EXISTED | Integration (Pending) |
+| `test_assessment.py` | ❌ NOT EXISTED | Integration (Pending) |
+| `test_billing.py` | ❌ NOT EXISTED | Integration (Pending) |
+| `test_stt_gateway.py` | 🔴 BLOCKED/FAILING (2) | Live Provider Contract |
+| `test_tts_gateway.py` | 🔴 BLOCKED/FAILING (1) | Live Provider Contract |
+| `test_a2f_gateway_smoke.py` | 🔴 BLOCKED (1) | Live Provider Contract |
 
 ---
 

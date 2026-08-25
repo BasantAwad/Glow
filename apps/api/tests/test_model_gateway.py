@@ -4,10 +4,13 @@ from glow_api.model_gateway import OpenWeightsModelGateway, GenerationRequest
 @pytest.mark.asyncio
 async def test_open_weights_gateway_generate_contract():
     # This is a live provider contract test using non-sensitive utterances
-    # It requires GLOW_HF_TOKEN in the environment.
+    import os
+    if os.environ.get("ENABLE_LIVE_PROVIDER_TESTS") != "1":
+        pytest.skip("Live provider tests not enabled.")
+        
     gateway = OpenWeightsModelGateway()
     if not gateway.is_configured:
-        pytest.skip("GLOW_HF_TOKEN is not configured in environment, skipping real provider test.")
+        pytest.fail("Live LLM test BLOCKED: GLOW_LLM_API_BASE is missing.")
 
     req = GenerationRequest(
         session_id="test_sess_1",
@@ -27,9 +30,13 @@ async def test_open_weights_gateway_generate_contract():
 
 @pytest.mark.asyncio
 async def test_open_weights_gateway_stream_contract():
+    import os
+    if os.environ.get("ENABLE_LIVE_PROVIDER_TESTS") != "1":
+        pytest.skip("Live provider tests not enabled.")
+
     gateway = OpenWeightsModelGateway()
     if not gateway.is_configured:
-        pytest.skip("GLOW_HF_TOKEN is not configured in environment, skipping real provider test.")
+        pytest.fail("Live LLM stream test BLOCKED: GLOW_LLM_API_BASE is missing.")
 
     req = GenerationRequest(
         session_id="test_sess_2",

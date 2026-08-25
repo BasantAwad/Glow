@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="GLOW_",
         extra="ignore",
-        env_file="../../.env",
+        env_file=".env",
     )
 
     # ---------------------------------------------------------------------------
@@ -74,9 +74,27 @@ class Settings(BaseSettings):
     llm_max_tokens: int = 512
 
     # ---------------------------------------------------------------------------
+    # STT Gateway (Phase 6B — Faster-Whisper)
+    # ---------------------------------------------------------------------------
+    stt_model_id: str | None = None
+    stt_model_path: str | None = None
+    stt_device: str = "cpu"
+    stt_compute_type: str = "int8"
+
+    # ---------------------------------------------------------------------------
+    # TTS Gateway (Phase 6C — Kokoro TTS)
+    # ---------------------------------------------------------------------------
+    tts_model_id: str | None = None
+    tts_model_path: str | None = None
+    tts_voice_id: str | None = None
+    tts_device: str = "cpu"
+
+    # ---------------------------------------------------------------------------
     # NVIDIA API (Phase 10 — Audio2Face-3D, BLOCKED)
     # ---------------------------------------------------------------------------
     nvidia_api_key: str | None = None
+    a2f_endpoint: str | None = None
+    a2f_function_id: str | None = None
 
     # ---------------------------------------------------------------------------
     # Hugging Face (optional — model downloads)

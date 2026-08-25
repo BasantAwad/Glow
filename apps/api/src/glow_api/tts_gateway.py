@@ -123,9 +123,10 @@ class KokoroTtsGateway(TtsGateway):
                    license. Quality for Arabic must be tested before production approval.
     """
 
-    MODEL_ID = "hexgrad/Kokoro-82M"
-
     def __init__(self) -> None:
+        from glow_api.settings import settings
+        self.model_id = settings.tts_model_id or "hexgrad/Kokoro-82M"
+        self.voice_id = settings.tts_voice_id or "af_heart"
         self._pipeline = None  # Lazy-loaded
 
     @property
@@ -156,7 +157,8 @@ class KokoroTtsGateway(TtsGateway):
 
             # Kokoro KPipeline.generate() returns (audio, sr, phonemes) tuples
             audio_segments = []
-            for audio, sr, _ in pipeline(request.text, voice=request.voice_id):
+            voice = request.voice_id or self.voice_id
+            for audio, sr, _ in pipeline(request.text, voice=voice):
                 audio_segments.append(audio)
 
             if not audio_segments:
@@ -178,7 +180,7 @@ class KokoroTtsGateway(TtsGateway):
         return SynthesizeResponse(
             audio_chunk=audio_bytes,
             latency_ms=latency_ms,
-            model_id=self.MODEL_ID,
+            model_id=self.model_id,
         )
 
     async def stream_synthesize(self, request: SynthesizeRequest) -> AsyncIterator[bytes]:

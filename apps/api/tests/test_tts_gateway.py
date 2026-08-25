@@ -50,8 +50,8 @@ async def test_kokoro_tts_gateway_contract():
     assert len(resp.audio_chunk) > 1000, \
         f"audio_chunk is suspiciously small ({len(resp.audio_chunk)} bytes). Synthesis may have failed silently."
     assert resp.latency_ms > 0, "latency_ms must be positive."
-    assert resp.model_id == KokoroTtsGateway.MODEL_ID, \
-        f"model_id mismatch: {resp.model_id!r} != {KokoroTtsGateway.MODEL_ID!r}"
+    assert resp.model_id == gateway.model_id, \
+        f"model_id mismatch: {resp.model_id!r} != {gateway.model_id!r}"
 
     # Verify the output is a valid WAV file
     import io

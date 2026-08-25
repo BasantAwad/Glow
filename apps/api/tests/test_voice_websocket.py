@@ -37,8 +37,6 @@ AUDIO FIXTURE:
 
 import os
 import io
-import struct
-import wave
 import pytest
 from fastapi.testclient import TestClient
 
@@ -46,50 +44,26 @@ from glow_api.main import app
 
 client = TestClient(app)
 
-
-def _make_silence_wav_1s() -> bytes:
-    """Generate a 1-second 16kHz / 16-bit PCM / Mono silence WAV."""
-    buf = io.BytesIO()
-    with wave.open(buf, "wb") as wav:
-        wav.setnchannels(1)
-        wav.setsampwidth(2)
-        wav.setframerate(16000)
-        wav.writeframes(b"\x00\x00" * 16000)  # 1 second of silence
-    return buf.getvalue()
-
-
 @pytest.mark.asyncio
 async def test_websocket_e2e_voice_flow():
-    """
-    E2E voice flow: silence audio → STT low-confidence gate → graceful error response.
-
-    Verifies:
-      1. WebSocket connection is accepted.
-      2. Sending binary audio returns an `stt_partial` acknowledgment.
-      3. Sending a flush triggers transcription.
-      4. Silence audio correctly triggers the low-confidence gate (stt_error) OR
-         produces an stt_final with empty/low-confidence text that is rejected
-         by the safety pipeline before reaching the LLM.
-      5. The connection closes cleanly.
-    """
     if os.environ.get("ENABLE_LIVE_PROVIDER_TESTS") != "1":
-        pytest.skip(
-            "Live provider tests not enabled. "
-            "Set ENABLE_LIVE_PROVIDER_TESTS=1 to run E2E voice tests.\n"
-            "Also ensure: faster-whisper is installed, and for LLM tests, "
-            "vLLM is running at LLM_API_BASE."
-        )
+        pytest.skip("Live provider tests not enabled.")
 
     try:
         import faster_whisper  # noqa: F401
     except ImportError:
+        pytest.fail("faster-whisper is not installed.")
+
+    fixture_path = os.path.join(os.path.dirname(__file__), "fixtures", "stt_smoke_sentence_16k_mono.wav")
+    if not os.path.exists(fixture_path):
         pytest.fail(
-            "faster-whisper is not installed. "
-            "Live E2E voice tests require the real STT dependency. "
-            "Run: pip install faster-whisper"
+            "Live E2E Voice Test BLOCKED.\n"
+            "Required: A real short human-recorded technical sentence (16kHz PCM mono).\n"
+            "Do NOT use synthetic audio or silent WAVs."
         )
 
-    audio_bytes = _make_silence_wav_1s()
+    with open(fixture_path, "rb") as f:
+        audio_bytes = f.read()
 
     with client.websocket_connect("/sessions/test_session_123/voice/stream") as websocket:
         # Send binary audio chunk
@@ -104,28 +78,16 @@ async def test_websocket_e2e_voice_flow():
         # Flush to trigger final transcription
         websocket.send_json({"type": "flush"})
 
-        # For silence input, we expect one of:
-        #   (a) stt_error — low confidence detected before LLM
-        #   (b) stt_final — empty/near-empty text that the safety pipeline rejects
+        # Wait for either stt_error or stt_final
         resp2 = websocket.receive_json()
 
         if resp2.get("type") == "stt_error":
-            # The low-confidence gate correctly blocked the silent audio.
-            # Verify the error message is informative.
-            assert "confidence" in resp2.get("message", "").lower() or \
-                   "low" in resp2.get("message", "").lower(), (
-                f"stt_error message is not informative: {resp2}"
-            )
-            # Flow ends here — correct behavior for silence input.
-            return
+            pytest.fail("Audio fixture was rejected as low confidence/silence.")
 
         assert resp2.get("type") == "stt_final", (
-            f"Expected 'stt_final' or 'stt_error', got: {resp2}"
+            f"Expected 'stt_final', got: {resp2}"
         )
 
-        # If stt_final was returned (possible for near-silent audio with
-        # some content), the safety pipeline should handle it.
-        # The LLM step may or may not be reached depending on the transcript.
         try:
             resp3 = websocket.receive_json()
             assert resp3.get("type") in ("llm_reply", "error", "safety_blocked"), (
@@ -134,6 +96,4 @@ async def test_websocket_e2e_voice_flow():
             if resp3.get("type") == "llm_reply":
                 assert "text" in resp3, "llm_reply must contain 'text' field"
         except Exception as exc:
-            # Timeouts or disconnects are acceptable — the session may have
-            # ended after the safety pipeline rejected the silent audio.
             pytest.skip(f"WebSocket closed or timed out after stt_final: {exc}")
