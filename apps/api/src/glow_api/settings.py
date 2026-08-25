@@ -8,6 +8,7 @@ For the full variable list and descriptions, see CLAUDE.md §10 and .env.example
 """
 
 from functools import lru_cache
+import os
 from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -19,7 +20,11 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="GLOW_",
         extra="ignore",
-        env_file=".env",
+        # The .env file is a developer convenience only.  Under `test` the
+        # environment must be fully controlled by the test fixtures, so the
+        # file is ignored — otherwise "provider unconfigured" tests break the
+        # moment a real key appears in .env.
+        env_file=None if os.environ.get("GLOW_ENVIRONMENT") == "test" else ".env",
     )
 
     # ---------------------------------------------------------------------------

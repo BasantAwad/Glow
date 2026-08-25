@@ -171,7 +171,10 @@ class OpenWeightsModelGateway(ModelGateway):
             "max_tokens": request.max_tokens,
             "temperature": request.temperature,
             "top_p": request.top_p,
-            "stream": False
+            "stream": False,
+            # Reasoning models (e.g. NVIDIA Nemotron hybrid) must not leak their
+            # chain-of-thought into user-facing support responses.
+            "reasoning": {"enabled": False, "exclude": True},
         }
 
         url = self.api_base.rstrip("/") + "/chat/completions"
@@ -236,7 +239,9 @@ class OpenWeightsModelGateway(ModelGateway):
             "max_tokens": request.max_tokens,
             "temperature": request.temperature,
             "top_p": request.top_p,
-            "stream": True
+            "stream": True,
+            # Keep chain-of-thought out of streamed support content as well.
+            "reasoning": {"enabled": False, "exclude": True},
         }
 
         url = self.api_base.rstrip("/") + "/chat/completions"

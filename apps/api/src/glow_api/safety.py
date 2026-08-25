@@ -398,8 +398,23 @@ def run_post_generation_check(
         block = True
         audit_note = "human_therapist_claim_in_output"
 
-    # Check for diagnostic claim.
-    if any(p in lower for p in ["you have ", "you are diagnosed", "i diagnose"]):
+    # Check for diagnostic claim.  Match diagnostic phrasing, not the generic
+    # words "you have" — normal empathic sentences like "you have been carrying
+    # a lot" must not be blocked.
+    if any(p in lower for p in [
+        "you are diagnosed",
+        "i diagnose you",
+        "diagnosed with",
+        "you are showing signs of",
+        "this is a classic sign of",
+        "which means you have",
+        "so you have depression",
+        "you have anxiety disorder",
+        "you have ptsd",
+        "you have bipolar",
+        "you have adhd",
+        "you have autism",
+    ]):
         signals.add(SafetySignal.DIAGNOSTIC_REQUEST)
         tier = max(tier, RiskTier.HIGH)
         block = True

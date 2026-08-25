@@ -6,6 +6,7 @@ Wires together the database, auth adapter, and user context.
 
 from __future__ import annotations
 
+import datetime
 from typing import Annotated
 
 from fastapi import Depends
@@ -100,9 +101,14 @@ async def get_current_user(
         preferred_session_minutes=model.preferences.preferred_session_minutes,
     )
 
+    # SQLite's dialect drops tzinfo on read; treat stored values as UTC.
+    created_at = model.created_at
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=datetime.timezone.utc)
+
     return UserAccount(
         user_id=model.user_id,
-        created_at=model.created_at,
+        created_at=created_at,
         is_adult_confirmed=model.is_adult_confirmed,
         is_active=model.is_active,
         preferences=prefs,
@@ -141,7 +147,11 @@ async def get_current_consent(
     return ConsentRecord(
         user_id=principal.user_id,
         record_version=model.record_version,
-        recorded_at=model.recorded_at,
+        recorded_at=(
+            model.recorded_at.replace(tzinfo=datetime.timezone.utc)
+            if model.recorded_at.tzinfo is None
+            else model.recorded_at
+        ),
         policy_version=model.policy_version,
         locale_presented=model.locale_presented,
         service_use=model.service_use,

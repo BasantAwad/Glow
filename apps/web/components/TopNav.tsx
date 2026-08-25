@@ -12,7 +12,8 @@ export function TopNav() {
 
   const links = [
     { to: "/", label: t("nav.talk"), icon: MessageCircle },
-    { to: "/presence", label: t("nav.presence"), icon: AudioLines },
+    { to: "/talk", label: t("nav.presence"), icon: AudioLines },
+    { to: "/presence", label: "Avatar", icon: Sparkles },
     { to: "/practices", label: t("nav.practices"), icon: Sparkles },
     { to: "/reflections", label: t("nav.reflections"), icon: Moon },
   ];

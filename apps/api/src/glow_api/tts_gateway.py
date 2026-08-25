@@ -134,10 +134,25 @@ class KokoroTtsGateway(TtsGateway):
         return True  # Always configured; fails at inference time if `kokoro-onnx` not installed.
 
     def _get_pipeline(self):
+        """Lazy-load the Kokoro ONNX model from .models/ (int8 CPU build).
+
+        Uses kokoro-onnx directly: the `kokoro` pip package (KPipeline) cannot
+        build on this environment, and kokoro-onnx is Apache-2.0 compatible.
+        """
         if self._pipeline is None:
             try:
-                from kokoro import KPipeline
-                self._pipeline = KPipeline(lang_code="a")  # 'a' = American English default
+                import os
+                from kokoro_onnx import Kokoro
+
+                model_dir = os.path.join(os.getcwd(), ".models")
+                model_path = os.path.join(model_dir, "kokoro-v1.0.onnx")
+                voices_path = os.path.join(model_dir, "voices.bin")
+                if not (os.path.isfile(model_path) and os.path.isfile(voices_path)):
+                    raise RuntimeError(
+                        "Kokoro ONNX weights missing. Download kokoro-v1.0.onnx "
+                        "and voices.bin into .models/ (see docs)."
+                    )
+                self._pipeline = Kokoro(model_path, voices_path)
             except ImportError as e:
                 raise RuntimeError(
                     "Kokoro TTS package is not installed. "
@@ -155,11 +170,15 @@ class KokoroTtsGateway(TtsGateway):
 
             pipeline = self._get_pipeline()
 
-            # Kokoro KPipeline.generate() returns (audio, sr, phonemes) tuples
-            audio_segments = []
-            voice = request.voice_id or self.voice_id
-            for audio, sr, _ in pipeline(request.text, voice=voice):
-                audio_segments.append(audio)
+            # kokoro-onnx Kokoro.create() synthesizes the full utterance at once
+            audio, sr = pipeline.create(
+                request.text,
+                voice=request.voice_id or self.voice_id,
+                speed=1.0,
+                lang="en-us",
+            )
+            audio_segments = [audio]
+            sample_rate = sr
 
             if not audio_segments:
                 raise RuntimeError("Kokoro returned no audio segments.")
@@ -167,7 +186,7 @@ class KokoroTtsGateway(TtsGateway):
             combined = np.concatenate(audio_segments)
 
             buf = io.BytesIO()
-            sf.write(buf, combined, samplerate=24000, format="WAV", subtype="PCM_16")
+            sf.write(buf, combined, samplerate=sample_rate, format="WAV", subtype="PCM_16")
             return buf.getvalue()
 
         loop = asyncio.get_running_loop()

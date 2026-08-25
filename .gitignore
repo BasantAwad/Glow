@@ -21,3 +21,13 @@ coverage/
 htmlcov/
 .coverage
 
+# Large local binaries: model weights and avatar assets (see docs)
+.models/*.onnx
+.models/*.bin
+apps/web/public/avatar.vrm
+public/avatar.vrm
+
+# Local dev artifacts
+glow.db
+glow_e2e_token.txt
+tts_test.wav

@@ -1,5 +1,7 @@
 """FastAPI application factory for Glow's non-sensitive baseline."""
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from pydantic import BaseModel
 
@@ -24,12 +26,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     """Create the API without connecting to any data, model, or safety provider."""
 
     active_settings = settings or get_settings()
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        from glow_api.database import db_manager
+        db_manager.initialize()
+        yield
+        await db_manager.close()
+
     app = FastAPI(
         title="Glow API",
         version="0.0.0",
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
+        lifespan=lifespan,
     )
 
     from fastapi.middleware.cors import CORSMiddleware
@@ -66,6 +77,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(session_router)
     app.include_router(avatar_router)
+
+    # Dev-only bootstrap (404s in production; see module docstring).
+    from glow_api.routers.dev_bootstrap import router as dev_bootstrap_router
+    app.include_router(dev_bootstrap_router)
 
     return app
 
