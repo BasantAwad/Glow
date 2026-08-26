@@ -7,8 +7,8 @@ a secret manager.  They are never hardcoded or committed to version control.
 For the full variable list and descriptions, see CLAUDE.md §10 and .env.example.
 """
 
-from functools import lru_cache
 import os
+from functools import lru_cache
 from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict

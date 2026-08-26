@@ -166,7 +166,7 @@ export default function PresencePage() {
   const phaseLabel: Record<Phase, string> = {
     idle: "Start a voice conversation",
     connecting: "Connecting…",
-    recording: "I'm listening — tap to finish",
+    recording: "I&apos;m listening — tap to finish",
     thinking: "Thinking…",
     speaking: "Speaking — tap the mic to reply",
   };

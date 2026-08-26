@@ -9,7 +9,7 @@
  * production this is replaced by a real login flow; no other code changes.
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_GLOW_API_URL ?? "http://127.0.0.1:8600";
+export const API_BASE = process.env.NEXT_PUBLIC_GLOW_API_URL ?? "http://127.0.0.1:8600";
 
 type TokenState = { token: string | null; userId: string | null };
 

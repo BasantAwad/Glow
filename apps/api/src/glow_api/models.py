@@ -9,10 +9,10 @@ The persistence layer translates between these ORM models and the domain types.
 
 from __future__ import annotations
 
-from typing import Any
 import datetime
+from typing import Any
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, LargeBinary, JSON
+from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Integer, LargeBinary, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from glow_api.database import Base
@@ -35,10 +35,26 @@ class UserAccountModel(Base):
     completed_sessions: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     free_sessions_remaining: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
 
-    preferences: Mapped["UserPreferencesModel"] = relationship(
+    # --- Credential auth (Argon2id hash; never plaintext) ---
+    email: Mapped[str | None] = mapped_column(String(254), unique=True, index=True, nullable=True)
+    password_hash: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    display_name: Mapped[str | None] = mapped_column(String(60), nullable=True)
+
+    # Account lockout (brute-force protection)
+    failed_login_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    locked_until: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Optional, granular diagnosis disclosure (user-controlled, revocable).
+    # Free-text so users can describe in their own words; never used for
+    # diagnosis and never inferred by the AI.
+    diagnosis_disclosed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    diagnosis_note_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary(), nullable=True)
+    diagnosis_key_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    preferences: Mapped[UserPreferencesModel] = relationship(
         back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
-    consents: Mapped[list["ConsentRecordModel"]] = relationship(
+    consents: Mapped[list[ConsentRecordModel]] = relationship(
         back_populates="user", cascade="all, delete-orphan", order_by="desc(ConsentRecordModel.record_version)"
     )
 
@@ -57,7 +73,7 @@ class UserPreferencesModel(Base):
     accessibility: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     preferred_session_minutes: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
 
-    user: Mapped["UserAccountModel"] = relationship(back_populates="preferences")
+    user: Mapped[UserAccountModel] = relationship(back_populates="preferences")
 
 
 class ConsentRecordModel(Base):
@@ -84,7 +100,49 @@ class ConsentRecordModel(Base):
     # safely interpret as no memory consent.
     memory_consent: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
 
-    user: Mapped["UserAccountModel"] = relationship(back_populates="consents")
+    user: Mapped[UserAccountModel] = relationship(back_populates="consents")
+
+
+# ---------------------------------------------------------------------------
+# Wellness: private journal + mood tracking (evidence-based self-help tools)
+# ---------------------------------------------------------------------------
+
+
+class JournalEntryModel(Base):
+    """Private reflective-journal entry (evidence-based writing practice).
+
+    Content is envelope-encrypted at rest. Only the owning user may read it.
+    """
+
+    __tablename__ = "journal_entries"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_account_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    title: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    encrypted_content: Mapped[bytes] = mapped_column(LargeBinary(), nullable=False)
+    key_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    # Optional mood snapshot taken at write time (1-7 scale, non-diagnostic).
+    mood_at_write: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class MoodEntryModel(Base):
+    """Daily mood check-in (non-diagnostic self-report, 1-7)."""
+
+    __tablename__ = "mood_entries"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_account_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    # UTC ISO date (YYYY-MM-DD) of the check-in; one per user per day.
+    day_utc: Mapped[str] = mapped_column(String(10), nullable=False)
+    mood: Mapped[int] = mapped_column(Integer, nullable=False)  # 1..7
+    note: Mapped[str | None] = mapped_column(String(280), nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 # ---------------------------------------------------------------------------
@@ -115,7 +173,7 @@ class SessionRecordModel(Base):
     summary_generated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     summary_consent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
-    user: Mapped["UserAccountModel"] = relationship()
+    user: Mapped[UserAccountModel] = relationship()
 
 
 class SessionMessageModel(Base):
@@ -130,7 +188,7 @@ class SessionMessageModel(Base):
     key_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
     timestamp: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.UTC), nullable=False)
     
-    session: Mapped["SessionRecordModel"] = relationship()
+    session: Mapped[SessionRecordModel] = relationship()
 
 
 class SafetyAuditEventModel(Base):

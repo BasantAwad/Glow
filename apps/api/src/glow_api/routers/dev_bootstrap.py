@@ -38,7 +38,6 @@ class DevBootstrapResponse(BaseModel):
 
 @router.post("/dev-bootstrap", response_model=DevBootstrapResponse)
 async def dev_bootstrap(_: DevBootstrapRequest | None = None) -> DevBootstrapResponse:
-    from fastapi import Request  # local import to avoid cycles in tooling
 
     from glow_api.settings import get_settings
 
@@ -60,7 +59,7 @@ async def dev_bootstrap(_: DevBootstrapRequest | None = None) -> DevBootstrapRes
         ).scalar_one_or_none()
         if existing is None:
             # Pass real datetime objects; SQLite stores them correctly.
-            now = datetime.datetime.now(datetime.timezone.utc)
+            now = datetime.datetime.now(datetime.UTC)
             user = UserAccountModel(
                 user_id=user_id,
                 created_at=now,
@@ -86,7 +85,7 @@ async def dev_bootstrap(_: DevBootstrapRequest | None = None) -> DevBootstrapRes
                 ConsentRecordModel(
                     user_account_id=user.id,
                     record_version=1,
-                    recorded_at=datetime.datetime.now(datetime.timezone.utc),
+                    recorded_at=datetime.datetime.now(datetime.UTC),
                     policy_version="safety-policy-v0",
                     locale_presented="en-US",
                     service_use=True,

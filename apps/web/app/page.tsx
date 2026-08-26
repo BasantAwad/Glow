@@ -1,170 +1,186 @@
 "use client";
 
+import Link from "next/link";
+import { motion } from "framer-motion";
 import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
-import { Send, Sparkles, Loader2, AlertTriangle } from "lucide-react";
-import { SafetyNote } from "../components/SafetyNote";
-import {
-  ensureSession,
-  startGlowSession,
-  sendMessage,
-} from "../lib/glow-api";
+  MessageCircle,
+  AudioLines,
+  BookHeart,
+  LineChart,
+  Wind,
+  Gamepad2,
+  Sparkles,
+} from "lucide-react";
+import { GlowMark } from "../components/GlowMark";
 
-type Message = {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
+const fadeUp = {
+  hidden: { opacity: 0, y: 24 },
+  show: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.6, delay: i * 0.08, ease: "easeOut" as const },
+  }),
 };
 
-const CRISIS_PATTERN =
-  /\b(suicide|suicidal|kill myself|end my life|hurt myself|self[- ]harm)\b/i;
+const features = [
+  {
+    icon: MessageCircle,
+    title: "Talk it out",
+    desc: "A companion that listens — by text or voice, whenever you need it. Nothing you share is judged.",
+    href: "/chat",
+  },
+  {
+    icon: AudioLines,
+    title: "See a friendly face",
+    desc: "Optional avatar presence with real-time voice and lip-sync for a more human conversation.",
+    href: "/presence",
+  },
+  {
+    icon: BookHeart,
+    title: "Private journal",
+    desc: "Expressive writing is proven to ease anxious thoughts. Your entries are encrypted, always.",
+    href: "/wellness",
+  },
+  {
+    icon: LineChart,
+    title: "Mood insights",
+    desc: "A daily check-in takes seconds. Gentle charts reveal your patterns over weeks, not scores.",
+    href: "/wellness",
+  },
+  {
+    icon: Wind,
+    title: "Calm in minutes",
+    desc: "Guided breathing and grounding exercises — small, clinically-informed tools for hard moments.",
+    href: "/practices",
+  },
+  {
+    icon: Gamepad2,
+    title: "Healing through play",
+    desc: "Lightweight games designed around focus and mindfulness, because rest is productive too.",
+    href: "/games",
+  },
+];
 
-export default function TalkPage() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "welcome",
-      role: "assistant",
-      content:
-        "Hi, I'm Glow. I'm an AI companion here to listen — not a human or a therapist. Share what's on your mind today.",
-    },
-  ]);
-  const [input, setInput] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const sessionIdRef = useRef<string | null>(null);
-  const endOfMessagesRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    endOfMessagesRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, busy]);
-
-  const push = useCallback((msg: Message) => {
-    setMessages((prev) => [...prev, msg]);
-  }, []);
-
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const text = input.trim();
-    if (!text || busy) return;
-
-    setInput("");
-    setError(null);
-    setBusy(true);
-    push({ id: `u-${Date.now()}`, role: "user", content: text });
-
-    // Client-side crisis banner (deterministic safety lives server-side).
-    if (CRISIS_PATTERN.test(text)) {
-      push({
-        id: `safety-${Date.now()}`,
-        role: "assistant",
-        content:
-          "I hear you, and I'm taking what you said seriously. If you're in immediate danger, please contact your local emergency number or a crisis line right now — for example 988 in the US, or findahelpline.com for your country. I'm still here with you.",
-      });
-      setBusy(false);
-      return;
-    }
-
-    try {
-      await ensureSession();
-      if (!sessionIdRef.current) {
-        const s = await startGlowSession();
-        sessionIdRef.current = s.sessionId;
-      }
-      const reply = await sendMessage(sessionIdRef.current, text);
-      push({ id: `a-${Date.now()}`, role: "assistant", content: reply });
-    } catch (err) {
-      console.error(err);
-      setError(
-        "Glow couldn't reach its support service just now. If this is urgent, please contact your local emergency services or crisis line.",
-      );
-    } finally {
-      setBusy(false);
-    }
-  };
-
+export default function HomePage() {
   return (
-    <main className="flex-1 flex flex-col max-w-3xl w-full mx-auto p-4 sm:p-6 lg:p-8 h-[calc(100vh-160px)]">
-      <div className="flex flex-col items-center mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-        <span className="aurora halo mb-4 flex size-16 items-center justify-center rounded-full">
-          <Sparkles className="size-6 text-primary-foreground" />
-        </span>
-        <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-center font-display">
-          How are you feeling?
-        </h1>
-        <p className="mt-2 text-muted-foreground text-center">
-          A calm space to think out loud.
-        </p>
-      </div>
+    <main className="flex-1">
+      {/* Hero */}
+      <section className="relative flex flex-col items-center text-center px-6 pt-20 pb-28">
+        <motion.div
+          variants={fadeUp}
+          initial="hidden"
+          animate="show"
+          custom={0}
+          className="aurora halo mb-8 flex size-20 items-center justify-center rounded-full"
+        >
+          <GlowMark className="size-14" />
+        </motion.div>
 
-      <SafetyNote />
+        <motion.h1
+          variants={fadeUp}
+          initial="hidden"
+          animate="show"
+          custom={1}
+          className="font-display max-w-3xl text-4xl sm:text-6xl font-semibold leading-tight tracking-tight"
+        >
+          A softer place to
+          <span className="block bg-gradient-to-r from-violet-300 via-pink-200 to-amber-200 bg-clip-text text-transparent">
+            untangle your thoughts.
+          </span>
+        </motion.h1>
 
-      <div className="flex-1 overflow-y-auto mt-6 mb-4 pr-2 space-y-5 scroll-smooth">
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`flex flex-col ${
-              msg.role === "user" ? "items-end" : "items-start"
-            } animate-in fade-in slide-in-from-bottom-2 duration-300`}
+        <motion.p
+          variants={fadeUp}
+          initial="hidden"
+          animate="show"
+          custom={2}
+          className="mt-6 max-w-xl text-muted-foreground text-base sm:text-lg leading-relaxed"
+        >
+          Glow is an AI companion for mental-health support — not a replacement
+          for professional care, but a warm first step when getting started is
+          the hardest part.
+        </motion.p>
+
+        <motion.div
+          variants={fadeUp}
+          initial="hidden"
+          animate="show"
+          custom={3}
+          className="mt-10 flex flex-col sm:flex-row items-center gap-4"
+        >
+          <Link
+            href="/register"
+            className="aurora halo rounded-full px-8 py-4 text-sm font-medium text-primary-foreground transition-transform hover:scale-[1.03]"
           >
-            <div
-              className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-5 py-3.5 text-sm sm:text-base leading-relaxed whitespace-pre-wrap ${
-                msg.role === "user"
-                  ? "bg-primary text-primary-foreground rounded-br-none shadow-md"
-                  : "glass rounded-bl-none text-foreground/90"
-              }`}
+            Begin gently — it&apos;s free
+          </Link>
+          <Link
+            href="/login"
+            className="glass-soft rounded-full px-8 py-4 text-sm font-medium transition-colors hover:text-foreground"
+          >
+            I already have an account
+          </Link>
+        </motion.div>
+
+        <motion.p
+          variants={fadeUp}
+          initial="hidden"
+          animate="show"
+          custom={4}
+          className="mt-8 text-xs text-muted-foreground/70 flex items-center gap-2"
+        >
+          <Sparkles className="size-3" />
+          Private by design · encrypted at rest · crisis support never paywalled
+        </motion.p>
+      </section>
+
+      {/* Features */}
+      <section className="max-w-5xl mx-auto px-6 pb-24">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {features.map((f, i) => (
+            <motion.div
+              key={f.title}
+              variants={fadeUp}
+              initial="hidden"
+              whileInView="show"
+              viewport={{ once: true, margin: "-60px" }}
+              custom={i % 3}
             >
-              {msg.content}
-            </div>
-            <span className="text-[11px] text-muted-foreground mt-1.5 px-1">
-              {msg.role === "user" ? "You" : "Glow"}
-            </span>
-          </div>
-        ))}
+              <Link
+                href={f.href}
+                className="glass group block h-full rounded-3xl p-6 transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/10"
+              >
+                <span className="aurora mb-4 flex size-11 items-center justify-center rounded-2xl">
+                  <f.icon className="size-5 text-primary-foreground" />
+                </span>
+                <h3 className="font-display text-lg font-semibold">{f.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  {f.desc}
+                </p>
+              </Link>
+            </motion.div>
+          ))}
+        </div>
+      </section>
 
-        {busy && (
-          <div className="flex items-center gap-2 text-muted-foreground px-2 animate-in fade-in duration-300">
-            <Loader2 className="size-4 animate-spin" />
-            <span className="text-sm">Glow is listening…</span>
-          </div>
-        )}
-
-        {error && (
-          <div className="flex items-start gap-3 glass border border-destructive/40 rounded-2xl px-5 py-4 text-sm text-destructive-foreground animate-in fade-in duration-300">
-            <AlertTriangle className="size-4 mt-0.5 shrink-0 text-destructive" />
-            <span>{error}</span>
-          </div>
-        )}
-        <div ref={endOfMessagesRef} />
-      </div>
-
-      <div className="mt-auto">
-        <form onSubmit={handleSend} className="relative">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Type what's on your mind…"
-            disabled={busy}
-            className="w-full glass rounded-full pl-6 pr-14 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all disabled:opacity-60"
-          />
-          <button
-            type="submit"
-            disabled={!input.trim() || busy}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 aurora halo flex size-9 items-center justify-center rounded-full text-primary-foreground transition-transform hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
-            aria-label="Send message"
-          >
-            {busy ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Send className="size-4" />
-            )}
-          </button>
-        </form>
-      </div>
+      {/* Safety strip */}
+      <section className="max-w-3xl mx-auto px-6 pb-24 text-center">
+        <motion.div
+          variants={fadeUp}
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true }}
+          className="glass rounded-4xl px-8 py-10"
+        >
+          <h2 className="font-display text-2xl font-semibold">Safety, honestly</h2>
+          <p className="mt-4 text-sm sm:text-base leading-relaxed text-muted-foreground">
+            Glow is an AI, never a licensed therapist. It won&apos;t diagnose, won&apos;t
+            judge, and will point you to real human help whenever things feel
+            too heavy — including crisis lines that are free to call, no matter
+            what.
+          </p>
+        </motion.div>
+      </section>
     </main>
   );
 }

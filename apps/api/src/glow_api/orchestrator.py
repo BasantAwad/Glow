@@ -9,16 +9,14 @@ from __future__ import annotations
 
 import datetime
 import uuid
-from typing import Sequence
-
-from glow_api.kms import kms_service
-from glow_api.crypto import EnvelopeEncryption
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from glow_api.consent import ConsentRecord
-from glow_api.errors import NotFoundError, AuthenticationError
+from glow_api.crypto import EnvelopeEncryption
+from glow_api.errors import AuthenticationError, NotFoundError
+from glow_api.kms import kms_service
 from glow_api.model_gateway import GenerationRequest, ModelGateway
 from glow_api.models import (
     SafetyAuditEventModel,
@@ -27,14 +25,13 @@ from glow_api.models import (
 )
 from glow_api.policy import ConversationPolicyEngine
 from glow_api.safety import (
-    CrisisFSM,
     SAFETY_POLICY_VERSION,
+    CrisisFSM,
     SafetyCheckResult,
     run_post_generation_check,
     run_pre_generation_check,
 )
 from glow_api.session import (
-    SessionRecord,
     SessionState,
     advance_session,
     make_session,
@@ -229,6 +226,14 @@ class SessionOrchestrator:
         history_tuples = tuple(history_tuples)
 
         # GENERATE
+        _LOCALE_NAMES = {
+            "EN": "English", "AR": "Arabic (Modern Standard Arabic)",
+            "ES": "Spanish", "JA": "Japanese", "ZH_HANS": "Simplified Chinese",
+        }
+        locale_display_name = _LOCALE_NAMES.get(
+            user.preferences.locale.value.upper(),
+            user.preferences.locale.value,
+        )
         request = GenerationRequest(
             session_id=session_id,
             user_id=user.user_id,
@@ -247,7 +252,9 @@ class SessionOrchestrator:
                 "calmly, check their immediate safety with one direct question, and "
                 "encourage contacting local emergency services or a crisis line. Never "
                 "provide methods or procedural detail of any kind.\n"
-                f"- The session language is {user.preferences.locale.value}; reply in English."
+                f"- Reply in the user's session language ({locale_display_name}); "
+                "match their language even mid-sentence switches. If they write "
+                "in Arabic, reply in natural Arabic."
             ),
             conversation_history=history_tuples,
             user_message=content,

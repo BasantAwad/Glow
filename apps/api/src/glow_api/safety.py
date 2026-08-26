@@ -40,7 +40,6 @@ from datetime import UTC, datetime
 from enum import IntEnum, StrEnum
 from typing import Any
 
-
 # ---------------------------------------------------------------------------
 # Risk tier
 # ---------------------------------------------------------------------------

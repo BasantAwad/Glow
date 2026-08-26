@@ -89,7 +89,7 @@ async def get_current_user(
     if model is None:
         raise NotFoundError(detail="User account not found.")
 
-    from glow_api.user import UserLocale, SessionMode, AvatarDisclosurePreference, InputModality
+    from glow_api.user import AvatarDisclosurePreference, InputModality, SessionMode, UserLocale
     
     prefs = UserPreferences(
         locale=UserLocale(model.preferences.locale.value if hasattr(model.preferences.locale, "value") else str(model.preferences.locale)),
@@ -104,7 +104,7 @@ async def get_current_user(
     # SQLite's dialect drops tzinfo on read; treat stored values as UTC.
     created_at = model.created_at
     if created_at.tzinfo is None:
-        created_at = created_at.replace(tzinfo=datetime.timezone.utc)
+        created_at = created_at.replace(tzinfo=datetime.UTC)
 
     return UserAccount(
         user_id=model.user_id,
@@ -148,7 +148,7 @@ async def get_current_consent(
         user_id=principal.user_id,
         record_version=model.record_version,
         recorded_at=(
-            model.recorded_at.replace(tzinfo=datetime.timezone.utc)
+            model.recorded_at.replace(tzinfo=datetime.UTC)
             if model.recorded_at.tzinfo is None
             else model.recorded_at
         ),

@@ -1,17 +1,16 @@
 """FastAPI application factory for Glow's non-sensitive baseline."""
 
-from contextlib import asynccontextmanager
-
-from fastapi import FastAPI
-from pydantic import BaseModel
-
-from glow_api.settings import Settings, get_settings
-from glow_api.routers.session_router import router as session_router
-from glow_api.routers.avatar import router as avatar_router
-from glow_api.logging import configure_logging
 import logging
 import time
-from fastapi import Request
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request
+from pydantic import BaseModel
+
+from glow_api.logging import configure_logging
+from glow_api.routers.avatar import router as avatar_router
+from glow_api.routers.session_router import router as session_router
+from glow_api.settings import Settings, get_settings
 
 
 class HealthResponse(BaseModel):
@@ -81,6 +80,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Dev-only bootstrap (404s in production; see module docstring).
     from glow_api.routers.dev_bootstrap import router as dev_bootstrap_router
     app.include_router(dev_bootstrap_router)
+
+    from glow_api.routers.account_router import router as account_router
+    app.include_router(account_router)
+
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next):
+        """OWASP hardening headers on every response."""
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        response.headers.setdefault(
+            "Permissions-Policy", "camera=(), geolocation=(), payment=()"
+        )
+        # HSTS only in production (TLS terminated upstream in dev).
+        if active_settings.environment == "production":
+            response.headers.setdefault("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
+        return response
 
     return app
 

@@ -3,7 +3,9 @@ Key Management Service (KMS) abstractions and LocalDevKMS implementation.
 """
 
 from typing import Protocol
+
 from glow_api.settings import settings
+
 
 class KeyManagementService(Protocol):
     """
@@ -19,6 +21,9 @@ class LocalDevKMS:
     """
     Local development implementation of KMS using an environment variable.
     """
+    @property
+    def active_key_id(self) -> str:
+        return "default"
     def get_master_key(self, key_id: str | None = None) -> bytes:
         hex_key = settings.master_key
         if not hex_key:

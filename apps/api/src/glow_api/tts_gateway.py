@@ -26,8 +26,8 @@ from __future__ import annotations
 import abc
 import asyncio
 import time
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import AsyncIterator
 
 
 @dataclass(frozen=True)
@@ -142,6 +142,7 @@ class KokoroTtsGateway(TtsGateway):
         if self._pipeline is None:
             try:
                 import os
+
                 from kokoro_onnx import Kokoro
 
                 model_dir = os.path.join(os.getcwd(), ".models")
@@ -165,8 +166,9 @@ class KokoroTtsGateway(TtsGateway):
 
         def _run_sync() -> bytes:
             import io
-            import soundfile as sf
+
             import numpy as np
+            import soundfile as sf
 
             pipeline = self._get_pipeline()
 
