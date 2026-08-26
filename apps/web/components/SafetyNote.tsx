@@ -17,7 +17,7 @@ export function SafetyNote() {
       </div>
       <button className="glass-soft flex items-center gap-2 rounded-full px-5 py-3 text-sm font-medium transition-transform hover:scale-[1.02]">
         <UserRound className="size-4" />
-        Talk with a qualified professional
+        {t("safety.professional")}
       </button>
     </section>
   );

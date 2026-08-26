@@ -11,6 +11,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Heart, ShieldCheck, UserRound } from "lucide-react";
 import { authFetch } from "../../lib/auth";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 type Profile = {
   user_id: string;
@@ -23,6 +24,7 @@ type Profile = {
 
 export default function ProfilePage() {
   const router = useRouter();
+  const { t } = useLanguage();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [editingDiagnosis, setEditingDiagnosis] = useState(false);
@@ -74,7 +76,7 @@ export default function ProfilePage() {
         <span className="aurora halo mb-3 flex size-16 items-center justify-center rounded-full">
           <UserRound className="size-7 text-primary-foreground" />
         </span>
-        <h1 className="font-display text-3xl font-semibold">Your profile</h1>
+        <h1 className="font-display text-3xl font-semibold">{t("profile.title")}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {profile?.display_name ? `Hi, ${profile.display_name}` : "Your private settings"}
         </p>
@@ -84,11 +86,11 @@ export default function ProfilePage() {
       <section className="glass rounded-3xl p-6 space-y-3">
         <h2 className="font-display font-semibold">Account</h2>
         <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">Member since</span>
+          <span className="text-muted-foreground">{t("profile.memberSince")}</span>
           <span>{profile && new Date(profile.created_at).toLocaleDateString()}</span>
         </div>
         <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">Free sessions left</span>
+          <span className="text-muted-foreground">{t("profile.freeSessions")}</span>
           <span>{profile?.free_sessions_remaining}</span>
         </div>
       </section>
@@ -98,7 +100,7 @@ export default function ProfilePage() {
         <div className="flex items-start gap-3">
           <Heart className="size-5 mt-0.5 shrink-0 text-primary" />
           <div>
-            <h2 className="font-display font-semibold">Diagnosis disclosure</h2>
+            <h2 className="font-display font-semibold">{t("profile.diagnosisTitle")}</h2>
             <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
               Optional. If a professional has diagnosed you with something,
               sharing it helps Glow be more informed — but it never changes how
@@ -111,7 +113,7 @@ export default function ProfilePage() {
           <div className="space-y-3">
             <p className="glass-soft rounded-xl px-4 py-3 text-sm whitespace-pre-wrap">
               {profile?.diagnosis_disclosed
-                ? profile.diagnosis_note || "Sharing (no details written)"
+                ? profile.diagnosis_note || t("profile.sharingNoDetails")
                 : "Not shared"}
             </p>
             <div className="flex gap-3">

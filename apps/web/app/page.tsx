@@ -12,6 +12,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { GlowMark } from "../components/GlowMark";
+import { useLanguage } from "../contexts/LanguageContext";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 24 },
@@ -22,46 +23,48 @@ const fadeUp = {
   }),
 };
 
-const features = [
+const getFeatures = (t: (k: string) => string) => [
   {
     icon: MessageCircle,
-    title: "Talk it out",
-    desc: "A companion that listens — by text or voice, whenever you need it. Nothing you share is judged.",
+    title: t("home.f.chat.title"),
+    desc: t("home.f.chat.desc"),
     href: "/chat",
   },
   {
     icon: AudioLines,
-    title: "See a friendly face",
-    desc: "Optional avatar presence with real-time voice and lip-sync for a more human conversation.",
+    title: t("home.f.avatar.title"),
+    desc: t("home.f.avatar.desc"),
     href: "/presence",
   },
   {
     icon: BookHeart,
-    title: "Private journal",
-    desc: "Expressive writing is proven to ease anxious thoughts. Your entries are encrypted, always.",
+    title: t("home.f.journal.title"),
+    desc: t("home.f.journal.desc"),
     href: "/wellness",
   },
   {
     icon: LineChart,
-    title: "Mood insights",
-    desc: "A daily check-in takes seconds. Gentle charts reveal your patterns over weeks, not scores.",
+    title: t("home.f.mood.title"),
+    desc: t("home.f.mood.desc"),
     href: "/wellness",
   },
   {
     icon: Wind,
-    title: "Calm in minutes",
-    desc: "Guided breathing and grounding exercises — small, clinically-informed tools for hard moments.",
+    title: t("home.f.calm.title"),
+    desc: t("home.f.calm.desc"),
     href: "/practices",
   },
   {
     icon: Gamepad2,
-    title: "Healing through play",
-    desc: "Lightweight games designed around focus and mindfulness, because rest is productive too.",
+    title: t("home.f.games.title"),
+    desc: t("home.f.games.desc"),
     href: "/games",
   },
 ];
 
 export default function HomePage() {
+  const { t } = useLanguage();
+
   return (
     <main className="flex-1">
       {/* Hero */}
@@ -83,9 +86,9 @@ export default function HomePage() {
           custom={1}
           className="font-display max-w-3xl text-4xl sm:text-6xl font-semibold leading-tight tracking-tight"
         >
-          A softer place to
+          {t("home.hero1")}
           <span className="block bg-gradient-to-r from-violet-300 via-pink-200 to-amber-200 bg-clip-text text-transparent">
-            untangle your thoughts.
+            {t("home.hero2")}
           </span>
         </motion.h1>
 
@@ -96,9 +99,7 @@ export default function HomePage() {
           custom={2}
           className="mt-6 max-w-xl text-muted-foreground text-base sm:text-lg leading-relaxed"
         >
-          Glow is an AI companion for mental-health support — not a replacement
-          for professional care, but a warm first step when getting started is
-          the hardest part.
+          {t("home.heroSub")}
         </motion.p>
 
         <motion.div
@@ -112,13 +113,13 @@ export default function HomePage() {
             href="/register"
             className="aurora halo rounded-full px-8 py-4 text-sm font-medium text-primary-foreground transition-transform hover:scale-[1.03]"
           >
-            Begin gently — it&apos;s free
+            {t("home.cta.start")}
           </Link>
           <Link
             href="/login"
             className="glass-soft rounded-full px-8 py-4 text-sm font-medium transition-colors hover:text-foreground"
           >
-            I already have an account
+            {t("home.cta.login")}
           </Link>
         </motion.div>
 
@@ -130,14 +131,14 @@ export default function HomePage() {
           className="mt-8 text-xs text-muted-foreground/70 flex items-center gap-2"
         >
           <Sparkles className="size-3" />
-          Private by design · encrypted at rest · crisis support never paywalled
+          {t("home.privacyLine")}
         </motion.p>
       </section>
 
       {/* Features */}
       <section className="max-w-5xl mx-auto px-6 pb-24">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {features.map((f, i) => (
+          {getFeatures(t).map((f, i) => (
             <motion.div
               key={f.title}
               variants={fadeUp}
@@ -172,7 +173,7 @@ export default function HomePage() {
           viewport={{ once: true }}
           className="glass rounded-4xl px-8 py-10"
         >
-          <h2 className="font-display text-2xl font-semibold">Safety, honestly</h2>
+          <h2 className="font-display text-2xl font-semibold">{t("home.safetyTitle")}</h2>
           <p className="mt-4 text-sm sm:text-base leading-relaxed text-muted-foreground">
             Glow is an AI, never a licensed therapist. It won&apos;t diagnose, won&apos;t
             judge, and will point you to real human help whenever things feel

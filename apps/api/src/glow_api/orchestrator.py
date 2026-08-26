@@ -226,13 +226,16 @@ class SessionOrchestrator:
         history_tuples = tuple(history_tuples)
 
         # GENERATE
+        # Language policy: ALWAYS reply in the language of the user's latest
+        # message (they may switch freely). The account locale is only a
+        # fallback when the message is language-neutral (e.g. "hi", emojis).
         _LOCALE_NAMES = {
-            "EN": "English", "AR": "Arabic (Modern Standard Arabic)",
-            "ES": "Spanish", "JA": "Japanese", "ZH_HANS": "Simplified Chinese",
+            "EN": "English", "AR": "Arabic (Egyptian-friendly Modern Standard Arabic)",
+            "ES": "Spanish", "FR": "French",
+            "JA": "Japanese", "ZH_HANS": "Simplified Chinese",
         }
-        locale_display_name = _LOCALE_NAMES.get(
-            user.preferences.locale.value.upper(),
-            user.preferences.locale.value,
+        fallback_language = _LOCALE_NAMES.get(
+            user.preferences.locale.value.upper(), "English"
         )
         request = GenerationRequest(
             session_id=session_id,
@@ -252,9 +255,12 @@ class SessionOrchestrator:
                 "calmly, check their immediate safety with one direct question, and "
                 "encourage contacting local emergency services or a crisis line. Never "
                 "provide methods or procedural detail of any kind.\n"
-                f"- Reply in the user's session language ({locale_display_name}); "
-                "match their language even mid-sentence switches. If they write "
-                "in Arabic, reply in natural Arabic."
+                "- LANGUAGE RULE (highest priority after safety): reply in the SAME "
+                "language the user just wrote in — Spanish message → Spanish reply, "
+                "French → French, Arabic → Arabic (natural Egyptian-friendly Arabic), "
+                "any other language → that language. Never mix languages and never "
+                "translate their words back in another language.\n"
+                f"- If their message has no detectable language, use {fallback_language}."
             ),
             conversation_history=history_tuples,
             user_message=content,

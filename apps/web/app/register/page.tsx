@@ -10,6 +10,7 @@ import { useLanguage } from "../../contexts/LanguageContext";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { t } = useLanguage();
   const { language } = useLanguage();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -60,7 +61,7 @@ export default function RegisterPage() {
         <form onSubmit={handleSubmit} className="mt-8 space-y-5">
           <div>
             <label htmlFor="displayName" className="text-xs font-medium text-muted-foreground">
-              What should Glow call you? <span className="opacity-60">(optional)</span>
+              {t("auth.nameLabel")} <span className="opacity-60">{t("auth.nameOptional")}</span>
             </label>
             <input
               id="displayName"
@@ -69,7 +70,7 @@ export default function RegisterPage() {
               onChange={(e) => setDisplayName(e.target.value)}
               maxLength={60}
               autoComplete="nickname"
-              placeholder="A name you like"
+              placeholder={t("auth.namePlaceholder")}
               className="mt-1.5 w-full glass-soft rounded-2xl px-4 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
@@ -114,7 +115,7 @@ export default function RegisterPage() {
               onChange={(e) => setAdult(e.target.checked)}
               className="mt-0.5 size-4 accent-[var(--primary)]"
             />
-            <span>I confirm I am 18 or older. Glow is currently adults-only.</span>
+            <span>{t("auth.adult")}</span>
           </label>
 
           {/* Optional diagnosis disclosure */}

@@ -15,6 +15,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { authFetch } from "../../lib/auth";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 type JournalEntry = {
   id: number;
@@ -29,6 +30,7 @@ type MoodEntry = { day_utc: string; mood: number; note: string | null };
 const MOOD_FACES = ["😞", "🙁", "😐", "🙂", "😊", "😄", "🤩"]; // 1..7
 
 export default function WellnessPage() {
+  const { t } = useLanguage();
   const [tab, setTab] = useState<"journal" | "mood" | "game">("journal");
 
   /* ---- journal state ---- */
@@ -102,7 +104,7 @@ export default function WellnessPage() {
   return (
     <main className="flex-1 max-w-3xl w-full mx-auto px-6 py-10">
       <div className="flex flex-col items-center mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-        <h1 className="font-display text-3xl font-semibold">Wellness tools</h1>
+        <h1 className="font-display text-3xl font-semibold">{t("wellness.title")}</h1>
         <p className="mt-2 text-sm text-muted-foreground text-center">
           Small practices, real evidence. All private to you.
         </p>
@@ -112,9 +114,9 @@ export default function WellnessPage() {
       <div className="flex justify-center gap-2 mb-8">
         {(
           [
-            ["journal", "Journal", BookHeart],
-            ["mood", "Mood chart", LineChart],
-            ["game", "Focus game", Target],
+            ["journal", t("wellness.tab.journal"), BookHeart],
+            ["mood", t("wellness.tab.mood"), LineChart],
+            ["game", t("wellness.tab.game"), Target],
           ] as const
         ).map(([key, label, Icon]) => (
           <button
@@ -138,7 +140,7 @@ export default function WellnessPage() {
               value={draftTitle}
               onChange={(e) => setDraftTitle(e.target.value)}
               maxLength={120}
-              placeholder="Give today&apos;s entry a title (optional)"
+              placeholder={t("wellness.journal.titlePh")}
               className="w-full glass-soft rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
             <textarea
@@ -146,7 +148,7 @@ export default function WellnessPage() {
               onChange={(e) => setDraftContent(e.target.value)}
               rows={6}
               maxLength={20000}
-              placeholder="Write freely — nobody grades this. Expressive writing helps externalize anxious thoughts."
+              placeholder={t("wellness.journal.writePh")}
               className="w-full glass-soft rounded-xl px-4 py-3 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-ring"
             />
             <button
@@ -162,7 +164,7 @@ export default function WellnessPage() {
           {(entries ?? []).map((e) => (
             <article key={e.id} className="glass rounded-3xl p-6">
               <div className="flex items-baseline justify-between gap-3">
-                <h3 className="font-display font-semibold">{e.title || "Untitled entry"}</h3>
+                <h3 className="font-display font-semibold">{e.title || t("wellness.journal.entryTitle")}</h3>
                 <span className="text-[11px] text-muted-foreground shrink-0">
                   {new Date(e.created_at).toLocaleDateString()}
                 </span>
@@ -184,7 +186,7 @@ export default function WellnessPage() {
       {tab === "mood" && (
         <section className="space-y-6 animate-in fade-in duration-300">
           <div className="glass rounded-3xl p-6 text-center">
-            <h3 className="font-display font-semibold">How was today?</h3>
+            <h3 className="font-display font-semibold">{t("wellness.mood.howToday")}</h3>
             <div className="mt-5 flex justify-center gap-2 sm:gap-3">
               {MOOD_FACES.map((face, i) => {
                 const v = i + 1;
@@ -212,9 +214,9 @@ export default function WellnessPage() {
           </div>
 
           <div className="glass rounded-3xl p-6">
-            <h3 className="font-display font-semibold mb-4">Last 14 days</h3>
+            <h3 className="font-display font-semibold mb-4">{t("wellness.mood.last14")}</h3>
             {moods.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No check-ins yet.</p>
+              <p className="text-sm text-muted-foreground">{t("wellness.mood.empty")}</p>
             ) : (
               <div className="flex items-end gap-1.5 h-32">
                 {moods.slice(-14).map((m) => (
@@ -246,6 +248,7 @@ export default function WellnessPage() {
 /** Breathing-focus mini game: expand/shrink circle, tap on the beat.
  *  Grounded in paced-breathing research (slow exhale > inhale calms arousal). */
 function BreathingGame() {
+  const { t } = useLanguage();
   const [score, setScore] = useState(0);
   const [best, setBest] = useState(0);
   const [phase, setPhase] = useState<"inhale" | "exhale" | "idle">("idle");
@@ -298,7 +301,7 @@ function BreathingGame() {
           }`}
         />
         <p className="mt-8 text-sm text-muted-foreground h-5">
-          {running ? (phase === "inhale" ? "Breathe in…" : "Breathe out slowly…") : ""}
+          {running ? (phase === "inhale" ? t("wellness.game.inhale") : t("wellness.game.exhale")) : ""}
         </p>
         <div className="mt-6 flex items-center gap-6">
           <span className="font-display text-3xl font-semibold">{score}</span>

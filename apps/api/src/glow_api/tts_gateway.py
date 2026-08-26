@@ -172,12 +172,26 @@ class KokoroTtsGateway(TtsGateway):
 
             pipeline = self._get_pipeline()
 
+            # Language-aware voice selection: Kokoro natively supports
+            # en/es/fr/ja/zh accents. Unsupported languages fall back to the
+            # default English voice rather than failing.
+            _LANG_MAP = {
+                "en": ("af_heart", "en-us"),
+                "es": ("ef_dora", "es"),
+                "fr": ("ff_siwis", "en-us"),  # French voice, fr accent pack
+                "ja": ("jf_alpha", "ja"),
+                "zh": ("zf_xiaobei", "zh"),
+                "ar": (self.voice_id or "af_heart", "en-us"),  # no native AR yet
+            }
+            detected = (request.language or "en").lower()[:2]
+            voice_id, lang_code = _LANG_MAP.get(detected, (self.voice_id or "af_heart", "en-us"))
+
             # kokoro-onnx Kokoro.create() synthesizes the full utterance at once
             audio, sr = pipeline.create(
                 request.text,
-                voice=request.voice_id or self.voice_id,
+                voice=voice_id,
                 speed=1.0,
-                lang="en-us",
+                lang=lang_code,
             )
             audio_segments = [audio]
             sample_rate = sr

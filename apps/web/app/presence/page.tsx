@@ -15,6 +15,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Mic, Square } from "lucide-react";
+import { useLanguage } from "../../contexts/LanguageContext";
 import { ensureSession, startGlowSession, voiceSocketUrl } from "../../lib/glow-api";
 
 type Phase = "idle" | "connecting" | "recording" | "thinking" | "speaking";
@@ -49,6 +50,7 @@ function encodeWav(samples: Float32Array, sampleRate = 16000): Blob {
 }
 
 export default function AvatarVoicePage() {
+  const { t } = useLanguage();
   const [phase, setPhase] = useState<Phase>("idle");
   const [loadingModel, setLoadingModel] = useState(true);
   const [captionGlow, setCaptionGlow] = useState("");
@@ -280,12 +282,12 @@ export default function AvatarVoicePage() {
       };
 
       ws.onerror = () => {
-        setError("Voice connection failed.");
+        setError(t("chat.error"));
         setPhase("idle");
       };
     } catch (err) {
       console.error(err);
-      setError("Microphone or connection unavailable.");
+      setError(t("voice.error"));
       setPhase("idle");
     }
   }, []);
@@ -326,7 +328,7 @@ export default function AvatarVoicePage() {
         {loadingModel && (
           <div className="absolute inset-0 flex items-center justify-center gap-2 text-muted-foreground">
             <Loader2 className="size-5 animate-spin" />
-            <span className="text-sm">Loading companion…</span>
+            <span className="text-sm">{t("avatar.loading")}</span>
           </div>
         )}
 
@@ -339,12 +341,12 @@ export default function AvatarVoicePage() {
             ) : null}
             <span className="text-sm truncate">
               {phase === "recording"
-                ? "Listening…"
+                ? t("voice.recording")
                 : phase === "thinking"
-                  ? "Thinking…"
+                  ? t("voice.thinking")
                   : phase === "speaking"
-                    ? captionGlow || "Speaking…"
-                    : "Connecting…"}
+                    ? captionGlow || t("voice.speaking")
+                    : t("voice.connecting")}
             </span>
           </div>
         )}

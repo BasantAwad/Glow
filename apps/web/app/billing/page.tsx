@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Check, Loader2, ShieldCheck } from "lucide-react";
+import { useLanguage } from "../../contexts/LanguageContext";
 import { authFetch } from "../../lib/auth";
 
 type Status = {
@@ -18,12 +19,12 @@ type Status = {
   price_egp: number;
 };
 
-const PLANS = [
+const getPlans = (t: (k: string) => string) => [
   {
     id: "free",
-    name: "Free",
+    name: t("billing.free.name"),
     price: "0",
-    period: "forever",
+    period: t("billing.free.period"),
     features: [
       "3 support sessions",
       "Text conversations",
@@ -34,10 +35,10 @@ const PLANS = [
   },
   {
     id: "session",
-    name: "Pay per session",
+    name: t("billing.payPerSession"),
     price: "700",
     currency: "EGP",
-    period: "/ session",
+    period: t("billing.perSession"),
     highlight: true,
     features: [
       "One full 60-minute conversation",
@@ -50,6 +51,7 @@ const PLANS = [
 ];
 
 export default function BillingPage() {
+  const { t } = useLanguage();
   const [status, setStatus] = useState<Status | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -89,8 +91,7 @@ export default function BillingPage() {
           Support that stays affordable
         </h1>
         <p className="mt-3 max-w-lg text-sm sm:text-base text-muted-foreground">
-          The essentials are free forever. Crisis help is never behind a
-          paywall — that&apos;s a promise built into the product, not the plan.
+          {t("billing.subtitle")}
         </p>
         {status && (
           <p className="mt-4 glass rounded-full px-5 py-2 text-xs text-muted-foreground">
@@ -104,7 +105,7 @@ export default function BillingPage() {
       </div>
 
       <div className="grid md:grid-cols-2 gap-6 max-w-3xl mx-auto">
-        {PLANS.map((plan) => {
+        {getPlans(t).map((plan) => {
           const isCurrent = plan.id === "free" && status && status.free_sessions_remaining > 0;
           return (
             <div
@@ -137,7 +138,7 @@ export default function BillingPage() {
 
               {isCurrent ? (
                 <p className="glass-soft mt-8 w-full rounded-full px-6 py-3.5 text-center text-sm">
-                  Your current plan
+                  {t("billing.currentPlan")}
                 </p>
               ) : plan.highlight ? (
                 <button

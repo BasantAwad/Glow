@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Mic, Square, Loader2, Volume2 } from "lucide-react";
+import { useLanguage } from "../../contexts/LanguageContext";
 import { ensureSession, startGlowSession, voiceSocketUrl } from "../../lib/glow-api";
 
 type Phase = "idle" | "connecting" | "recording" | "thinking" | "speaking";
@@ -43,6 +44,7 @@ function encodeWav(samples: Float32Array, sampleRate = 16000): Blob {
 }
 
 export default function PresencePage() {
+  const { t } = useLanguage();
   const [phase, setPhase] = useState<Phase>("idle");
   const [captionUser, setCaptionUser] = useState("");
   const [captionGlow, setCaptionGlow] = useState("");
@@ -127,7 +129,7 @@ export default function PresencePage() {
       };
 
       ws.onerror = () => {
-        setError("Voice connection failed. Text chat still works.");
+        setError(t("chat.error"));
         setPhase("idle");
       };
       ws.onclose = () => {
@@ -135,7 +137,7 @@ export default function PresencePage() {
       };
     } catch (err) {
       console.error(err);
-      setError("Microphone or connection unavailable. Check browser permissions.");
+      setError(t("voice.error"));
       setPhase("idle");
     }
   }, [phase]);
@@ -164,11 +166,11 @@ export default function PresencePage() {
   }, [cleanupRecording]);
 
   const phaseLabel: Record<Phase, string> = {
-    idle: "Start a voice conversation",
-    connecting: "Connecting…",
-    recording: "I&apos;m listening — tap to finish",
-    thinking: "Thinking…",
-    speaking: "Speaking — tap the mic to reply",
+    idle: t("voice.start"),
+    connecting: t("voice.connecting"),
+    recording: t("voice.recording"),
+    thinking: t("voice.thinking"),
+    speaking: t("voice.speaking"),
   };
 
   return (
@@ -241,8 +243,7 @@ export default function PresencePage() {
       )}
 
       <p className="mt-auto pt-8 text-xs text-muted-foreground/70 text-center">
-        Audio is transcribed in real time and is not stored unless you consent.
-        Glow is an AI companion — not emergency care.
+        {t("voice.disclaimer")}
       </p>
     </main>
   );

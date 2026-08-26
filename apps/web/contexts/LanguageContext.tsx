@@ -184,6 +184,7 @@ const en: Dict = {
   "billing.free.period": "forever",
   "billing.plus.name": "Glow Plus",
   "billing.plus.tag": "Most loved",
+  "billing.payPerSession": "Pay per session",
   "billing.perMonth": "/month",
   "billing.currentPlan": "Your current plan",
   "billing.waitlist": "Join waitlist",
@@ -198,6 +199,12 @@ const en: Dict = {
   // reflections
   "reflections.title": "Your week, gently noticed",
   "reflections.subtitle": "A gentle reflection on your emotional journey.",
+  "voice.error": "Microphone or connection unavailable. Check browser permissions.",
+  "billing.subtitle2": "The essentials are free forever. Crisis help is never behind a paywall — that&apos;s a promise built into the product, not the plan.",
+  "billing.perSession": "/ session",
+  "billing.buy": "Buy a session",
+  "billing.egp": "EGP",
+  "wellness.journal.entryTitle": "Untitled entry",
 };
 
 const ar: Dict = {
@@ -342,6 +349,7 @@ const ar: Dict = {
   "billing.free.period": "للأبد",
   "billing.plus.name": "جلو بلس",
   "billing.plus.tag": "الأكثر تفضيلًا",
+  "billing.payPerSession": "الدفع لكل جلسة",
   "billing.perMonth": "/شهريًا",
   "billing.currentPlan": "خطتك الحالية",
   "billing.waitlist": "انضم لقائمة الانتظار",
@@ -354,6 +362,11 @@ const ar: Dict = {
 
   "reflections.title": "أسبوعك بملاحظة لطيفة",
   "reflections.subtitle": "تأمل لطيف في رحلتك العاطفية.",
+  "voice.error": "الميكروفون أو الاتصال غير متاح. تحقق من أذونات المتصفح.",
+  "billing.perSession": "/ جلسة",
+  "billing.buy": "اشترِ جلسة",
+  "billing.egp": "جنيه",
+  "wellness.journal.entryTitle": "مدخلة بدون عنوان",
 };
 
 const es: Dict = {
@@ -423,11 +436,17 @@ const es: Dict = {
   "billing.title": "Apoyo que sigue siendo accesible",
   "billing.subtitle": "Lo esencial es gratis para siempre. La ayuda en crisis jamás está tras un muro de pago.",
   "billing.free.name": "Gratis", "billing.free.period": "para siempre", "billing.plus.name": "Glow Plus",
-  "billing.plus.tag": "El favorito", "billing.perMonth": "/mes", "billing.currentPlan": "Tu plan actual",
+  "billing.plus.tag": "El favorito",
+  "billing.payPerSession": "Pago por sesión", "billing.perMonth": "/mes", "billing.currentPlan": "Tu plan actual",
   "billing.waitlist": "Unirse a lista de espera", "billing.joined": "Estás en la lista 💜",
   "billing.footer": "Los pagos serán procesados por un proveedor autorizado. Nunca almacenamos datos de tarjetas.",
   "practices.title": "Prácticas", "practices.subtitle": "Explora ejercicios de atención plena y arraigo.",
   "reflections.title": "Tu semana, gentilmente observada", "reflections.subtitle": "Una reflexión suave sobre tu viaje emocional.",
+  "voice.error": "Micrófono o conexión no disponibles. Revisa los permisos del navegador.",
+  "billing.perSession": "/ sesión",
+  "billing.buy": "Comprar una sesión",
+  "billing.egp": "EGP",
+  "wellness.journal.entryTitle": "Entrada sin título",
 };
 
 const fr: Dict = {
@@ -497,11 +516,17 @@ const fr: Dict = {
   "billing.title": "Un soutien qui reste abordable",
   "billing.subtitle": "L'essentiel est gratuit pour toujours. L'aide en crise n'est jamais derrière un paywall.",
   "billing.free.name": "Gratuit", "billing.free.period": "pour toujours", "billing.plus.name": "Glow Plus",
-  "billing.plus.tag": "Le plus apprécié", "billing.perMonth": "/mois", "billing.currentPlan": "Votre plan actuel",
+  "billing.plus.tag": "Le plus apprécié",
+  "billing.payPerSession": "Paiement à la séance", "billing.perMonth": "/mois", "billing.currentPlan": "Votre plan actuel",
   "billing.waitlist": "Rejoindre la liste d'attente", "billing.joined": "Vous êtes sur la liste 💜",
   "billing.footer": "Les paiements seront traités par un fournisseur agréé. Aucune donnée de carte n'est stockée sur nos serveurs.",
   "practices.title": "Pratiques", "practices.subtitle": "Explorez la pleine conscience et les exercices d'ancrage.",
   "reflections.title": "Votre semaine, doucement remarquée", "reflections.subtitle": "Une réflexion douce sur votre parcours émotionnel.",
+  "voice.error": "Micro ou connexion indisponible. Vérifiez les permissions du navigateur.",
+  "billing.perSession": "/ séance",
+  "billing.buy": "Acheter une séance",
+  "billing.egp": "EGP",
+  "wellness.journal.entryTitle": "Entrée sans titre",
 };
 
 const translations: Record<Language, Dict> = { en, ar, es, fr };

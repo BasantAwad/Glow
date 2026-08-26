@@ -6,9 +6,11 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
 import { apiLogin, clearStoredAuth } from "../../lib/auth";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { t } = useLanguage();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -38,7 +40,7 @@ export default function LoginPage() {
         transition={{ duration: 0.5 }}
         className="glass w-full max-w-md rounded-4xl p-8 sm:p-10"
       >
-        <h1 className="font-display text-3xl font-semibold text-center">Welcome back</h1>
+        <h1 className="font-display text-3xl font-semibold text-center">{t("auth.loginTitle")}</h1>
         <p className="mt-2 text-center text-sm text-muted-foreground">
           Your space is exactly as you left it.
         </p>

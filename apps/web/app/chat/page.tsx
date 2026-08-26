@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Send, Sparkles, Loader2, AlertTriangle } from "lucide-react";
+import { useLanguage } from "../../contexts/LanguageContext";
 import { SafetyNote } from "../../components/SafetyNote";
 import {
   ensureSession,
@@ -27,13 +28,10 @@ type Message = {
 const CRISIS_PATTERN =
   /\b(suicide|suicidal|kill myself|end my life|hurt myself|self[- ]harm)\b/i;
 
-const CHECK_INS = [
-  "Still with you — take your time. Is there anything on your mind you&apos;d like to explore?",
-  "No rush at all. I&apos;m here whenever you feel like continuing.",
-  "Just checking in gently — how are you feeling right now?",
-];
+const CHECK_INS = ["chat.checkin1", "chat.checkin2", "chat.checkin3"];
 
 export default function ChatPage() {
+  const { t } = useLanguage();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome",
@@ -239,7 +237,7 @@ const handleSend = async (e: React.FormEvent) => {
             setUserTyping(e.target.value.length > 0);
             if (e.target.value.length === 0) lastActivityRef.current = Date.now();
           }}
-          placeholder="Type what&apos;s on your mind…"
+          placeholder={t("chat.placeholder")}
           disabled={busy}
           className="w-full glass rounded-full pl-6 pr-14 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-ring transition-all disabled:opacity-60"
         />

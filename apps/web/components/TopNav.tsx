@@ -29,12 +29,12 @@ export function TopNav() {
 
   const links = [
     { to: "/", label: t("nav.talk"), icon: Home },
-    { to: "/chat", label: "Chat", icon: MessageCircle },
-    { to: "/talk", label: "Voice", icon: AudioLines },
-    { to: "/presence", label: "Avatar", icon: Sparkles },
-    { to: "/wellness", label: "Wellness", icon: BookHeart },
+    { to: "/chat", label: t("nav.chat"), icon: MessageCircle },
+    { to: "/talk", label: t("nav.voice"), icon: AudioLines },
+    { to: "/presence", label: t("nav.avatar"), icon: Sparkles },
+    { to: "/wellness", label: t("nav.wellness"), icon: BookHeart },
     { to: "/reflections", label: t("nav.reflections"), icon: Moon },
-    { to: "/billing", label: "Billing", icon: CreditCard },
+    { to: "/billing", label: t("nav.billing"), icon: CreditCard },
   ];
 
   return (
@@ -88,7 +88,7 @@ export function TopNav() {
           <div className="flex items-center gap-2">
             <Link
               href="/profile"
-              aria-label="Your profile"
+              aria-label={t("nav.profile")}
               className={`aurora halo flex size-10 items-center justify-center rounded-full transition-opacity hover:opacity-90 ${
                 pathname === "/profile" ? "ring-2 ring-ring/70" : ""
               }`}
