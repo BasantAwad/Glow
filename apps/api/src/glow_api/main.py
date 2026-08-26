@@ -84,6 +84,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     from glow_api.routers.account_router import router as account_router
     app.include_router(account_router)
 
+    from glow_api.routers.billing_router import router as billing_router
+    app.include_router(billing_router)
+
     @app.middleware("http")
     async def security_headers(request: Request, call_next):
         """OWASP hardening headers on every response."""

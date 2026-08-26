@@ -251,3 +251,17 @@ class EvidenceEntryModel(Base):
     permitted_uses: Mapped[list[str]] = mapped_column(JSON, nullable=False)
     clinical_notes: Mapped[str] = mapped_column(String, default="", nullable=False)
 
+
+class PaymentWebhookEventModel(Base):
+    """Provider payment webhook event (idempotency + audit)."""
+
+    __tablename__ = "payment_webhook_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    provider_event_id: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    provider_name: Mapped[str] = mapped_column(String(32), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    payload_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    processed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    processed_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    received_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
