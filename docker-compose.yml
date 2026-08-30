@@ -1,22 +1,35 @@
-version: '3.8'
+version: "3.9"
 
 services:
-  postgres:
-    image: pgvector/pgvector:pg16
-    container_name: glow-postgres
-    environment:
-      POSTGRES_USER: glow_user
-      POSTGRES_PASSWORD: glow_password
-      POSTGRES_DB: glow_db
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: glow-api
+    restart: unless-stopped
     ports:
-      - "5432:5432"
+      - "8000:8000"
+    environment:
+      GLOW_ENVIRONMENT: production
+      GLOW_DATABASE_URL: sqlite+aiosqlite:///./glow.db
+      # IMPORTANT: Change these before production deployment
+      GLOW_AUTH_SECRET_KEY: ${GLOW_AUTH_SECRET_KEY:-change-me-in-production}
+      GLOW_MASTER_KEY: ${GLOW_MASTER_KEY:-}
+      GLOW_LLM_API_BASE: ${GLOW_LLM_API_BASE:-}
+      GLOW_LLM_MODEL_ID: ${GLOW_LLM_MODEL_ID:-Qwen/Qwen2.5-14B-Instruct}
+      # TTS
+      GLOW_TTS_MODEL_PATH: ${GLOW_TTS_MODEL_PATH:-}
+      GLOW_TTS_VOICE_ID: ${GLOW_TTS_VOICE_ID:-a}
+      # STT
+      GLOW_STT_MODEL_ID: ${GLOW_STT_MODEL_ID:-tiny}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - glow-data:/app/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U glow_user -d glow_db"]
-      interval: 5s
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 30s
       timeout: 5s
-      retries: 5
+      retries: 3
+      start_period: 10s
 
 volumes:
-  postgres_data:
+  glow-data:

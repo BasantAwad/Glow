@@ -33,7 +33,14 @@ class UserAccountModel(Base):
     is_adult_confirmed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     completed_sessions: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    free_sessions_remaining: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    free_sessions_remaining: Mapped[int] = mapped_column(
+        Integer, default=3, nullable=False,
+        server_default="3",
+    )
+    __table_args__ = (
+        # Check constraint: free_sessions_remaining >= 0
+        # (not applicable to SQLite, enforced in domain model)
+    )
 
     preferences: Mapped["UserPreferencesModel"] = relationship(
         back_populates="user", uselist=False, cascade="all, delete-orphan"
@@ -66,7 +73,13 @@ class ConsentRecordModel(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_account_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
 
-    record_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    record_version: Mapped[int] = mapped_column(
+        Integer, nullable=False,
+        server_default="1",
+    )
+    __table_args__ = (
+        # Check constraint: record_version >= 1
+    )
     recorded_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     policy_version: Mapped[str] = mapped_column(String(64), nullable=False)
     locale_presented: Mapped[str] = mapped_column(String(20), nullable=False)
@@ -83,6 +96,12 @@ class ConsentRecordModel(Base):
     # Default: False.  server_default ensures existing rows without this column
     # safely interpret as no memory consent.
     memory_consent: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+
+    # How the user was verified when consent was given (e.g. "jwt_bearer").
+    # Stored for audit trail completeness.  Must be non-empty in new records.
+    expected_verification_method: Mapped[str] = mapped_column(
+        String(128), nullable=False, default="jwt_bearer"
+    )
 
     user: Mapped["UserAccountModel"] = relationship(back_populates="consents")
 

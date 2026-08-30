@@ -139,6 +139,11 @@ class UserPreferences(BaseModel):
     # hard limit per billing rules (Phase 8).  User may choose shorter.
     preferred_session_minutes: Annotated[int, Field(ge=5, le=60)] = 60
 
+    # Therapist gender presentation for the avatar/conversation.
+    # Default: female.  Affects Tavus deployment ID selection and pronoun
+    # references in the system prompt.
+    therapist_gender: Annotated[str, Field(pattern=r"^(female|male)$")] = "female"
+
     @field_validator("persona_name")
     @classmethod
     def validate_persona_name(cls, value: str | None) -> str | None:

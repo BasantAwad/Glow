@@ -249,6 +249,7 @@ async def _authenticate_websocket(
                 recorded_at=consent_model.recorded_at,
                 policy_version=consent_model.policy_version,
                 locale_presented=consent_model.locale_presented,
+                expected_verification_method=getattr(consent_model, "expected_verification_method", "jwt_bearer"),
                 service_use=consent_model.service_use,
                 transcript_retention=consent_model.transcript_retention,
                 audio_storage=consent_model.audio_storage,
