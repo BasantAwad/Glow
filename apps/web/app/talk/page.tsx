@@ -1,18 +1,20 @@
 "use client";
 
 /**
- * Voice session — real pipeline.
+ * Voice session — orb-only view (no avatar).
  *
- * Mic audio (WAV, 16 kHz mono) → Glow WebSocket → faster-whisper STT →
+ * Mic audio (WAV 16 kHz mono) → Glow WebSocket → faster-whisper STT →
  * safety-checked LLM reply → Kokoro TTS audio back to the browser.
- * Captions are always shown; the transcript is never stored client-side
- * beyond the visible caption.
+ *
+ * FIX: Microphone is acquired BEFORE the WebSocket opens so that
+ * permission errors (NotAllowedError, NotFoundError) surface immediately
+ * as readable error messages instead of hanging silently.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Mic, Square, Loader2, Volume2 } from "lucide-react";
 import { useLanguage } from "../../contexts/LanguageContext";
-import { ensureSession, startGlowSession, voiceSocketUrl } from "../../lib/glow-api";
+import { ensureSession, startGlowSession, voiceSocketUrl, GlowApiOfflineError } from "../../lib/glow-api";
 
 type Phase = "idle" | "connecting" | "recording" | "thinking" | "speaking";
 
@@ -43,7 +45,7 @@ function encodeWav(samples: Float32Array, sampleRate = 16000): Blob {
   return new Blob([view], { type: "audio/wav" });
 }
 
-export default function PresencePage() {
+export default function TalkPage() {
   const { t } = useLanguage();
   const [phase, setPhase] = useState<Phase>("idle");
   const [captionUser, setCaptionUser] = useState("");
@@ -71,6 +73,32 @@ export default function PresencePage() {
   const startListening = useCallback(async () => {
     setError(null);
     setPhase("connecting");
+    setCaptionUser("");
+    setCaptionGlow("");
+
+    // Step 1: Acquire microphone BEFORE opening the WebSocket.
+    // This ensures mic permission errors are caught and surfaced immediately.
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true },
+      });
+    } catch (err) {
+      const e = err as DOMException;
+      if (e.name === "NotAllowedError" || e.name === "PermissionDeniedError") {
+        setError("Microphone access was denied. Please allow mic permission and try again.");
+      } else if (e.name === "NotFoundError") {
+        setError("No microphone found. Please connect a microphone and try again.");
+      } else {
+        setError(`Microphone error: ${e.message}`);
+      }
+      setPhase("idle");
+      return;
+    }
+
+    streamRef.current = stream;
+
+    // Step 2: Get/create the Glow session.
     try {
       await ensureSession();
       if (!sessionIdRef.current) {
@@ -78,76 +106,80 @@ export default function PresencePage() {
         sessionIdRef.current = s.sessionId;
       }
       const { token } = await ensureSession();
+
+      // Step 3: Open the WebSocket with the mic stream already ready.
       const ws = new WebSocket(
         `${voiceSocketUrl(sessionIdRef.current!)}?token=${encodeURIComponent(token)}`,
       );
       socketRef.current = ws;
 
-      ws.onopen = async () => {
+      ws.onopen = () => {
         setPhase("recording");
-        // Record mic as raw PCM chunks; assembled into WAV on stop.
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
-        });
-        streamRef.current = stream;
+        chunksRef.current = [];
+
         const ctx = new AudioContext({ sampleRate: 16000 });
         audioCtxRef.current = ctx;
         const src = ctx.createMediaStreamSource(stream);
         const proc = ctx.createScriptProcessor(4096, 1, 1);
         processorRef.current = proc;
-        chunksRef.current = [];
         proc.onaudioprocess = (ev) => {
           chunksRef.current.push(new Float32Array(ev.inputBuffer.getChannelData(0)));
         };
         src.connect(proc);
-        proc.connect(ctx.destination); // needed for ScriptProcessor to fire
+        proc.connect(ctx.destination); // required for ScriptProcessor to fire
       };
 
       ws.onmessage = (event) => {
         if (typeof event.data === "string") {
-          const msg = JSON.parse(event.data);
+          const msg = JSON.parse(event.data) as {
+            type: string;
+            text?: string;
+            message?: string;
+          };
           if (msg.type === "stt_final" && msg.text) setCaptionUser(msg.text);
           if (msg.type === "llm_reply" && msg.text) {
             setCaptionGlow(msg.text);
             setPhase("speaking");
           }
           if (msg.type === "stt_error" || msg.type === "error") {
-            setError(String(msg.message ?? "Voice error"));
-            setPhase("recording");
+            setError(String(msg.message ?? "Voice error — please try again."));
+            setPhase("idle");
           }
         } else {
-          // Binary = TTS audio (WAV). Play it, then allow next turn.
-          const blob = new Blob([event.data], { type: "audio/wav" });
+          // Binary frame = TTS WAV. Play it, then return to idle.
+          const blob = new Blob([event.data as BlobPart], { type: "audio/wav" });
           const url = URL.createObjectURL(blob);
           const audio = new Audio(url);
           audio.onended = () => {
             URL.revokeObjectURL(url);
-            setPhase("recording");
+            setPhase("idle");
           };
-          audio.play().catch(() => setPhase("recording"));
+          audio.play().catch(() => setPhase("idle"));
         }
       };
 
       ws.onerror = () => {
-        setError(t("chat.error"));
+        setError("Connection error — is the Glow API running?");
+        cleanupRecording();
         setPhase("idle");
       };
       ws.onclose = () => {
         if (phase !== "idle") setPhase("idle");
       };
     } catch (err) {
-      console.error(err);
-      setError(t("voice.error"));
+      console.error("[talk]", err);
+      cleanupRecording();
+      if (err instanceof GlowApiOfflineError) {
+        setError(err.message);
+      } else {
+        setError(t("voice.error"));
+      }
       setPhase("idle");
     }
-  }, [phase]);
+  }, [cleanupRecording, t, phase]);
 
   const stopListening = useCallback(() => {
-    cleanupRecording();
     setPhase("thinking");
-
-    // Assemble recorded PCM into one WAV and send.
-    const ctx = audioCtxRef.current;
     const total = chunksRef.current.reduce((n, c) => n + c.length, 0);
     if (total > 0 && socketRef.current?.readyState === WebSocket.OPEN) {
       const merged = new Float32Array(total);
@@ -156,13 +188,13 @@ export default function PresencePage() {
         merged.set(c, off);
         off += c.length;
       }
-      const wav = encodeWav(merged, 16000);
-      socketRef.current.send(wav);
+      socketRef.current.send(encodeWav(merged, 16000));
       socketRef.current.send(JSON.stringify({ type: "flush" }));
     } else {
       setPhase("idle");
     }
     chunksRef.current = [];
+    cleanupRecording();
   }, [cleanupRecording]);
 
   const phaseLabel: Record<Phase, string> = {
@@ -173,43 +205,47 @@ export default function PresencePage() {
     speaking: t("voice.speaking"),
   };
 
+  const isActive = phase === "recording" || phase === "speaking" || phase === "thinking";
+  const canToggle = phase !== "connecting" && phase !== "thinking";
+
   return (
     <main className="flex-1 flex flex-col items-center max-w-3xl w-full mx-auto p-4 sm:p-6 lg:p-8">
       <div className="flex flex-col items-center mb-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
         <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-center font-display">
           Voice presence
         </h1>
-        <p className="mt-2 text-muted-foreground text-center">
+        <p className="mt-2 text-muted-foreground text-center text-sm">
           Talk naturally. Captions always on.
         </p>
       </div>
 
       {/* Breathing orb */}
-      <div className="relative my-8 select-none">
+      <div className="relative my-8 select-none flex items-center justify-center">
         <div
-          className={`aurora halo rounded-full transition-all duration-1000 ease-in-out ${
+          className={`aurora halo rounded-full transition-all duration-700 ease-in-out ${
             phase === "recording"
-              ? "size-40 opacity-100 animate-pulse"
+              ? "size-44 opacity-100 animate-pulse"
               : phase === "thinking"
-                ? "size-28 opacity-70"
+                ? "size-32 opacity-70 breathe"
                 : phase === "speaking"
-                  ? "size-36 opacity-90"
-                  : "size-24 opacity-50"
+                  ? "size-40 opacity-90 breathe"
+                  : "size-28 opacity-50"
           }`}
         />
       </div>
 
+      {/* Mic toggle */}
       <button
-        onClick={phase === "recording" || phase === "speaking" || phase === "thinking" ? stopListening : startListening}
-        disabled={phase === "connecting"}
-        className={`aurora halo mb-6 flex size-20 items-center justify-center rounded-full text-primary-foreground transition-all hover:scale-105 active:scale-95 ${
+        onClick={canToggle ? (isActive ? stopListening : startListening) : undefined}
+        disabled={!canToggle}
+        className={`aurora halo mb-6 flex size-20 items-center justify-center rounded-full text-primary-foreground transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${
           phase === "recording" ? "ring-4 ring-ring/60 animate-pulse" : ""
         }`}
-        aria-label={phase === "recording" ? "Stop and send" : "Start speaking"}
+        aria-label={isActive ? "Stop and send" : "Start speaking"}
       >
         {phase === "connecting" || phase === "thinking" ? (
           <Loader2 className="size-7 animate-spin" />
-        ) : phase === "recording" || phase === "speaking" ? (
+        ) : isActive ? (
           <Square className="size-6" />
         ) : (
           <Mic className="size-7" />
@@ -221,8 +257,9 @@ export default function PresencePage() {
         {phaseLabel[phase]}
       </p>
 
+      {/* Captions */}
       {(captionUser || captionGlow) && (
-        <div className="w-full space-y-4">
+        <div className="w-full space-y-3">
           {captionUser && (
             <div className="glass rounded-2xl px-5 py-3.5 self-end max-w-[85%] ml-auto w-fit text-sm text-foreground/80">
               {captionUser}
@@ -236,8 +273,9 @@ export default function PresencePage() {
         </div>
       )}
 
+      {/* Error */}
       {error && (
-        <div className="glass border border-destructive/40 rounded-2xl px-5 py-4 text-sm mt-6">
+        <div className="glass border border-destructive/40 rounded-2xl px-5 py-4 text-sm mt-6 w-full max-w-sm">
           {error}
         </div>
       )}

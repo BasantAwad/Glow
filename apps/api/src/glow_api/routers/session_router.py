@@ -36,7 +36,7 @@ from glow_api.dependencies import (
     get_current_consent,
     get_current_user,
 )
-from glow_api.errors import AuthenticationError, ProviderNotConfiguredError
+from glow_api.errors import AuthenticationError, ProviderNotConfiguredError, GlowError
 from glow_api.model_gateway import get_model_gateway
 from glow_api.orchestrator import SessionOrchestrator
 from glow_api.policy import ConversationPolicyEngine
@@ -344,9 +344,16 @@ async def voice_stream(
                         audio_chunk=bytes(audio_buffer),
                         is_final=True,
                     )
-
-                    stt_resp = await stt.transcribe(req)
                     audio_buffer.clear()
+
+                    try:
+                        stt_resp = await stt.transcribe(req)
+                    except Exception as e:
+                        await websocket.send_json({
+                            "type": "error",
+                            "message": f"STT failed: {e}"
+                        })
+                        continue
 
                     await websocket.send_json({
                         "type": "stt_final",
@@ -375,7 +382,13 @@ async def voice_stream(
                             except ProviderNotConfiguredError as e:
                                 await websocket.send_json({
                                     "type": "error",
-                                    "message": f"llm_not_configured: {e}",
+                                    "message": f"LLM is not configured: {e.detail}",
+                                })
+                                continue
+                            except Exception as e:
+                                await websocket.send_json({
+                                    "type": "error",
+                                    "message": f"LLM Server error: {e}",
                                 })
                                 continue
 
@@ -398,6 +411,11 @@ async def voice_stream(
                                     await websocket.send_json({
                                         "type": "error",
                                         "message": f"tts_not_configured: {e}",
+                                    })
+                                except Exception as e:
+                                    await websocket.send_json({
+                                        "type": "error",
+                                        "message": f"TTS failed: {e}",
                                     })
                     else:
                         await websocket.send_json({

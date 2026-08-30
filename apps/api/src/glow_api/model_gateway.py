@@ -150,7 +150,7 @@ class OpenWeightsModelGateway(ModelGateway):
     async def generate(self, request: GenerationRequest) -> GenerationResponse:
         import httpx
         import time
-        from glow_api.errors import ProviderNotConfiguredError
+        from glow_api.errors import ProviderNotConfiguredError, GlowError, ErrorCode
 
         if not self.is_configured:
             raise ProviderNotConfiguredError("model_gateway")
@@ -186,7 +186,11 @@ class OpenWeightsModelGateway(ModelGateway):
                 resp.raise_for_status()
                 data = resp.json()
             except httpx.HTTPError as e:
-                raise RuntimeError(f"Model provider request failed: {e}") from e
+                raise GlowError(
+                    ErrorCode.PROVIDER_UNAVAILABLE,
+                    f"Model provider request failed: {e}",
+                    http_status=503,
+                ) from e
 
         latency_ms = (time.perf_counter() - start_time) * 1000.0
 
@@ -219,7 +223,7 @@ class OpenWeightsModelGateway(ModelGateway):
     async def stream(self, request: GenerationRequest) -> AsyncIterator[str]:
         import httpx
         import json
-        from glow_api.errors import ProviderNotConfiguredError
+        from glow_api.errors import ProviderNotConfiguredError, GlowError, ErrorCode
 
         if not self.is_configured:
             raise ProviderNotConfiguredError("model_gateway")
@@ -266,7 +270,11 @@ class OpenWeightsModelGateway(ModelGateway):
                             except json.JSONDecodeError:
                                 pass
         except httpx.HTTPError as e:
-            raise RuntimeError(f"Model provider stream request failed: {e}") from e
+            raise GlowError(
+                ErrorCode.PROVIDER_UNAVAILABLE,
+                f"Model provider stream request failed: {e}",
+                http_status=503,
+            ) from e
 
 # Gateway factory — lazy, called at dependency-injection time (not at import time).
 # Never call this at module level; doing so crashes when settings fields are absent.

@@ -11,6 +11,8 @@ from glow_api.logging import configure_logging
 from glow_api.routers.avatar import router as avatar_router
 from glow_api.routers.session_router import router as session_router
 from glow_api.settings import Settings, get_settings
+from glow_api.errors import GlowError
+from fastapi.responses import JSONResponse
 
 
 class HealthResponse(BaseModel):
@@ -57,6 +59,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             status="ok",
             service=active_settings.service_name,
             environment=active_settings.environment,
+        )
+
+    @app.exception_handler(GlowError)
+    async def glow_error_handler(request: Request, exc: GlowError):
+        logger = logging.getLogger("glow_api.errors")
+        if exc.http_status >= 500:
+            logger.error(f"GlowError: {exc.code} - {exc.detail}")
+        else:
+            logger.info(f"GlowError: {exc.code} - {exc.detail}")
+            
+        return JSONResponse(
+            status_code=exc.http_status,
+            content={
+                "error": exc.code,
+                "detail": exc.detail if exc.safe_for_client else "An error occurred.",
+            },
         )
 
     # Note: Full payload logging is omitted to prevent therapy data from entering logs
