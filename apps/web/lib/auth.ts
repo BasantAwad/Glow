@@ -6,7 +6,7 @@
  * exploit. The backend remains the sole authority for all decisions.
  */
 
-import { API_BASE } from "./glow-api";
+import { apiFetch, API_BASE, getApiErrorMessage } from "./glow-api";
 
 const TOKEN_KEY = "glow.auth.token";
 const USER_KEY = "glow.auth.userId";
@@ -54,13 +54,22 @@ export type RegisterInput = {
 };
 
 export async function apiRegister(input: RegisterInput): Promise<AuthState> {
-  const res = await fetch(`${API_BASE}/auth/register`, {
+  const res = await apiFetch(`${API_BASE}/auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
+  if (!res.ok) {
+    let detail = "Registration failed. Please check your details and try again.";
+    try {
+      const data = (await res.json()) as { detail?: string };
+      if (data.detail && data.detail.length < 180) detail = data.detail;
+    } catch {
+      // Keep the safe fallback for non-JSON responses.
+    }
+    throw new Error(detail);
+  }
   const data = await res.json();
-  if (!res.ok) throw new Error(data.detail ?? "Registration failed");
   const auth: AuthState = {
     token: data.token,
     userId: data.user_id,
@@ -71,13 +80,22 @@ export async function apiRegister(input: RegisterInput): Promise<AuthState> {
 }
 
 export async function apiLogin(email: string, password: string): Promise<AuthState> {
-  const res = await fetch(`${API_BASE}/auth/login`, {
+  const res = await apiFetch(`${API_BASE}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
+  if (!res.ok) {
+    let detail = "Sign in failed. Check your email and password and try again.";
+    try {
+      const data = (await res.json()) as { detail?: string };
+      if (data.detail && data.detail.length < 180) detail = data.detail;
+    } catch {
+      // Keep the safe fallback for non-JSON responses.
+    }
+    throw new Error(detail);
+  }
   const data = await res.json();
-  if (!res.ok) throw new Error(data.detail ?? "Login failed");
   const auth: AuthState = {
     token: data.token,
     userId: data.user_id,

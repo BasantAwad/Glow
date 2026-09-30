@@ -154,6 +154,7 @@ async def get_current_consent(
         ),
         policy_version=model.policy_version,
         locale_presented=model.locale_presented,
+        expected_verification_method=getattr(model, "expected_verification_method", "jwt_bearer"),
         service_use=model.service_use,
         transcript_retention=model.transcript_retention,
         audio_storage=model.audio_storage,

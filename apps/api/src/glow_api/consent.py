@@ -129,6 +129,15 @@ class ConsentRecord(BaseModel):
     # to determine whether the localised disclosure was current.
     locale_presented: Annotated[str, Field(min_length=2, max_length=_MAX_LOCALE_LEN)]
 
+    # How the user was verified when they consented (e.g. "email_otp",
+    # "jwt_bearer", "in_person").  Must not be empty — a blank value would
+    # make the consent audit trail non-actionable.  Default: "unknown" is
+    # acceptable only during initial DB migration of legacy records; the
+    # server must reject any new ConsentRecord whose value is blank.
+    expected_verification_method: Annotated[
+        str, Field(min_length=1, max_length=128, pattern=r"^[a-z0-9_\-]+$")
+    ] = "jwt_bearer"
+
     # Per-purpose opt-in flags.  All default to the most privacy-protective
     # setting consistent with service operation.
     service_use: bool = True
@@ -299,6 +308,7 @@ def apply_consent_update(
         recorded_at=recorded_at,
         policy_version=CONSENT_POLICY_VERSION,
         locale_presented=update.locale_presented,
+        expected_verification_method=current.expected_verification_method,
         service_use=current.service_use,  # service_use is never reduced by update
         transcript_retention=_pick(
             update.transcript_retention, current.transcript_retention
@@ -327,6 +337,7 @@ def make_initial_consent(
     personalisation: bool = False,
     research_and_model_improvement: bool = False,
     memory_consent: bool = False,
+    expected_verification_method: str = "jwt_bearer",
 ) -> ConsentRecord:
     """Construct the first ConsentRecord for a new user.
 
@@ -346,6 +357,8 @@ def make_initial_consent(
         personalisation: Whether the user opted into personalisation.
         research_and_model_improvement: Whether the user opted into research use.
         memory_consent: Whether the user opted into long-term memory (ADR 0004).
+        expected_verification_method: How the user was verified at consent time
+            (e.g. "jwt_bearer", "email_otp").  Must be non-blank.
 
     Returns:
         A frozen ConsentRecord at record_version=1.
@@ -357,6 +370,7 @@ def make_initial_consent(
         recorded_at=recorded_at,
         policy_version=CONSENT_POLICY_VERSION,
         locale_presented=locale_presented,
+        expected_verification_method=expected_verification_method,
         service_use=True,
         transcript_retention=transcript_retention,
         audio_storage=audio_storage,

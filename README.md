@@ -11,7 +11,7 @@ Glow is an adult-focused AI mental-health support and care-navigation product. I
 
 ## Current baseline
 
-The repository currently provides only a non-sensitive health-check baseline. It does not implement authentication, consent, sessions, model access, conversation handling, crisis resources, billing, or storage of user content.
+The repository currently provides a working FastAPI backend with authentication, consent, session management, safety control plane, TTS/STT gateways, and a Next.js frontend with text chat, Tavus therapist embed, guided exercises, session history, mood check-in, crisis bar, and multi-language support (en/es/fr/ar).
 
 ## Requirements
 

@@ -1,13 +1,4 @@
 @import "tailwindcss";
-@source "../components";
-@source "../app";
-
-@custom-variant dark (&:is(.dark *));
-
-/*
- * Glow design system — dreamy nocturnal glassmorphism.
- * All colors in oklch. Never hardcode colors in components.
- */
 
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
@@ -21,8 +12,6 @@
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
@@ -36,9 +25,6 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --color-glow: var(--glow);
-  --color-glow-soft: var(--glow-soft);
-  --color-petal: var(--petal);
   --font-display: "Quicksand", ui-rounded, system-ui, sans-serif;
   --font-sans: "Nunito Sans", ui-sans-serif, system-ui, sans-serif;
 }
@@ -49,43 +35,27 @@
   --foreground: oklch(0.97 0.012 300);
   --card: oklch(0.99 0.01 300 / 12%);
   --card-foreground: oklch(0.97 0.012 300);
-  --popover: oklch(0.24 0.07 285);
-  --popover-foreground: oklch(0.97 0.012 300);
   --primary: oklch(0.72 0.14 300);
   --primary-foreground: oklch(0.18 0.06 285);
   --secondary: oklch(0.99 0.01 300 / 14%);
   --secondary-foreground: oklch(0.97 0.012 300);
   --muted: oklch(0.99 0.01 300 / 10%);
-  --muted-foreground: oklch(0.86 0.04 300 / 78%);
+  --muted-foreground: oklch(0.92 0.04 300 / 88%);
   --accent: oklch(0.82 0.1 340);
   --accent-foreground: oklch(0.2 0.06 300);
-  --destructive: oklch(0.68 0.19 20);
+  --destructive: oklch(0.78 0.16 25);
   --destructive-foreground: oklch(0.98 0.01 300);
-  --border: oklch(1 0 0 / 18%);
+  --border: oklch(1 0 0 / 22%);
   --input: oklch(1 0 0 / 14%);
   --ring: oklch(0.8 0.11 300);
-  --glow: oklch(0.78 0.13 300);
-  --glow-soft: oklch(0.88 0.07 320);
-  --petal: oklch(0.85 0.09 350);
-
-  --gradient-aurora: linear-gradient(
-    135deg,
-    oklch(0.72 0.14 300 / 70%),
-    oklch(0.85 0.09 350 / 60%)
-  );
-  --gradient-veil: linear-gradient(
-    180deg,
-    oklch(1 0 0 / 18%),
-    oklch(1 0 0 / 6%)
-  );
-  --shadow-float: 0 24px 60px -24px oklch(0.15 0.08 290 / 70%);
-  --shadow-halo: 0 0 40px -6px oklch(0.78 0.13 300 / 60%);
+  --gradient-aurora: linear-gradient(135deg, oklch(0.72 0.14 300 / 88%), oklch(0.85 0.09 350 / 82%));
+  --gradient-veil: linear-gradient(180deg, oklch(1 0 0 / 18%), oklch(1 0 0 / 8%));
+  --shadow-float: 0 24px 60px -24px oklch(0.08 0.08 290 / 80%);
+  --shadow-halo: 0 0 40px -6px oklch(0.78 0.13 300 / 70%);
 }
 
 @layer base {
-  * {
-    border-color: var(--color-border);
-  }
+  * { border-color: var(--color-border); }
 
   body {
     background-color: var(--color-background);
@@ -94,15 +64,9 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  h1,
-  h2,
-  h3 {
-    font-family: var(--font-display);
-    letter-spacing: -0.01em;
-  }
+  h1, h2, h3 { font-family: var(--font-display); }
 }
 
-/* Frosted glass surface */
 @utility glass {
   background-image: var(--gradient-veil);
   backdrop-filter: blur(22px) saturate(140%);
@@ -112,89 +76,165 @@
 }
 
 @utility glass-soft {
-  background-color: oklch(1 0 0 / 8%);
+  background-color: oklch(1 0 0 / 10%);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  border: 1px solid oklch(1 0 0 / 14%);
+  border: 1px solid oklch(1 0 0 / 18%);
 }
 
-@utility aurora {
-  background-image: var(--gradient-aurora);
-}
+@utility aurora { background-image: var(--gradient-aurora); }
+@utility halo { box-shadow: var(--shadow-halo); }
 
-@utility halo {
-  box-shadow: var(--shadow-halo);
-}
-
-@utility breathe {
-  animation: breathe 7s ease-in-out infinite;
-}
-
-@utility drift-up {
-  animation: drift-up 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
+@utility breathe { animation: breathe 7s ease-in-out infinite; }
 
 @keyframes breathe {
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 0.85;
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(1.06); opacity: 1; }
+}
+
+/* Ambient mood-based animated background overlay */
+/* The gradient shifts subtly based on session mood context */
+
+@layer base {
+  /* The ambient overlay sits behind content, above the dark overlay */
+  .ambient-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    transition: opacity 2s ease;
   }
-  50% {
-    transform: scale(1.06);
-    opacity: 1;
+
+  /* Slow breathing pulse for calm sessions */
+  .ambient-calm {
+    background: radial-gradient(
+      120% 120% at 50% 0%,
+      oklch(0.78 0.13 300 / 12%),
+      transparent 70%
+    );
+    animation: ambient-pulse-calm 8s ease-in-out infinite;
+  }
+
+  /* Warmer pulse for supportive/grounded sessions */
+  .ambient-warm {
+    background: radial-gradient(
+      120% 120% at 50% 0%,
+      oklch(0.82 0.14 350 / 14%),
+      transparent 70%
+    );
+    animation: ambient-pulse-warm 6s ease-in-out infinite;
+  }
+
+  /* Cooler pulse for reflective sessions */
+  .ambient-cool {
+    background: radial-gradient(
+      120% 120% at 50% 0%,
+      oklch(0.72 0.12 260 / 14%),
+      transparent 70%
+    );
+    animation: ambient-pulse-cool 7s ease-in-out infinite;
+  }
+
+  /* Gentle drift for the presence/avatar page */
+  .ambient-drift {
+    background: radial-gradient(
+      150% 150% at 30% 40%,
+      oklch(0.78 0.13 300 / 10%),
+      transparent 60%
+    ),
+    radial-gradient(
+      150% 150% at 70% 60%,
+      oklch(0.85 0.09 350 / 8%),
+      transparent 60%
+    );
+    animation: ambient-drift 12s ease-in-out infinite alternate;
+  }
+
+  @keyframes ambient-pulse-calm {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+  }
+  @keyframes ambient-pulse-warm {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+  }
+  @keyframes ambient-pulse-cool {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 0.95; }
+  }
+  @keyframes ambient-drift {
+    0% { transform: translate(0, 0) scale(1); }
+    100% { transform: translate(-5%, -3%) scale(1.05); }
   }
 }
 
-@keyframes drift-up {
+/* Delivery animation for chat bubbles */
+@utility bubble-in {
+  animation: bubble-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes bubble-in {
   from {
     opacity: 0;
-    transform: translateY(14px);
+    transform: translateY(8px) scale(0.97);
   }
   to {
     opacity: 1;
-    transform: none;
+    transform: translateY(0) scale(1);
   }
 }
 
-/* Shooting Star Global Animation */
-.shooting-star-layer {
-  background: transparent;
-}
-.shooting-star-layer::before, .shooting-star-layer::after {
-  content: "";
-  position: absolute;
-  top: -10%;
-  left: 50%;
-  width: 2px;
-  height: 2px;
-  background: white;
-  border-radius: 50%;
-  box-shadow: 0 0 10px 2px rgba(255, 255, 255, 0.4), 
-              0 0 20px 2px rgba(255, 255, 255, 0.2);
-  animation: shootingStar 8s linear infinite;
-  opacity: 0;
-}
-.shooting-star-layer::after {
-  left: 80%;
-  animation-delay: 4s;
-  animation-duration: 12s;
+/* Waveform bars for voice indicator */
+@utility waveform {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 24px;
 }
 
-@keyframes shootingStar {
-  0% {
-    transform: translate(0, 0) scale(1) rotate(45deg);
+.waveform-bar {
+  width: 3px;
+  border-radius: 2px;
+  background: var(--color-primary);
+  animation: waveform-bar 0.8s ease-in-out infinite;
+}
+
+.waveform-bar:nth-child(1) { animation-delay: 0.0s; height: 40%; }
+.waveform-bar:nth-child(2) { animation-delay: 0.1s; height: 70%; }
+.waveform-bar:nth-child(3) { animation-delay: 0.2s; height: 50%; }
+.waveform-bar:nth-child(4) { animation-delay: 0.3s; height: 85%; }
+.waveform-bar:nth-child(5) { animation-delay: 0.4s; height: 55%; }
+.waveform-bar:nth-child(6) { animation-delay: 0.5s; height: 75%; }
+.waveform-bar:nth-child(7) { animation-delay: 0.6s; height: 45%; }
+.waveform-bar:nth-child(8) { animation-delay: 0.7s; height: 80%; }
+
+@keyframes waveform-bar {
+  0%, 100% { transform: scaleY(0.4); opacity: 0.5; }
+  50% { transform: scaleY(1); opacity: 1; }
+}
+
+/* Pulsing dot for "listening" state */
+@utility pulse-dot {
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.4); opacity: 0.6; }
+}
+
+/* Gentle shimmer for exercise step transitions */
+@utility shimmer {
+  animation: shimmer 0.6s ease-out both;
+}
+
+@keyframes shimmer {
+  from {
     opacity: 0;
+    transform: translateY(4px);
   }
-  10% {
+  to {
     opacity: 1;
-  }
-  20% {
-    transform: translate(-100vw, 100vh) scale(0) rotate(45deg);
-    opacity: 0;
-  }
-  100% {
-    transform: translate(-100vw, 100vh) scale(0) rotate(45deg);
-    opacity: 0;
+    transform: translateY(0);
   }
 }

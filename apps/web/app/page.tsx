@@ -11,8 +11,8 @@ import {
   Gamepad2,
   Sparkles,
 } from "lucide-react";
-import { GlowMark } from "../components/GlowMark";
 import { useLanguage } from "../contexts/LanguageContext";
+import { GlowMark } from "../components/GlowMark";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 24 },
@@ -67,7 +67,6 @@ export default function HomePage() {
 
   return (
     <main className="flex-1">
-      {/* Hero */}
       <section className="relative flex flex-col items-center text-center px-6 pt-20 pb-28">
         <motion.div
           variants={fadeUp}
@@ -135,7 +134,6 @@ export default function HomePage() {
         </motion.p>
       </section>
 
-      {/* Features */}
       <section className="max-w-5xl mx-auto px-6 pb-24">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {getFeatures(t).map((f, i) => (
@@ -164,7 +162,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Safety strip */}
       <section className="max-w-3xl mx-auto px-6 pb-24 text-center">
         <motion.div
           variants={fadeUp}
@@ -176,9 +173,8 @@ export default function HomePage() {
           <h2 className="font-display text-2xl font-semibold">{t("home.safetyTitle")}</h2>
           <p className="mt-4 text-sm sm:text-base leading-relaxed text-muted-foreground">
             Glow is an AI, never a licensed therapist. It won&apos;t diagnose, won&apos;t
-            judge, and will point you to real human help whenever things feel
-            too heavy — including crisis lines that are free to call, no matter
-            what.
+            judge, and will point you to real human help whenever things feel too heavy —
+            including crisis lines that are free to call, no matter what.
           </p>
         </motion.div>
       </section>

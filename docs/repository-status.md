@@ -40,19 +40,21 @@
 
 ### Phase 1 — Authentication, consent, user, DB
 
-| Item | Status |
-|---|---|
-| SQLAlchemy ORM models: users, preferences, consents | ✅ IMPLEMENTED |
-| Alembic migrations (initial schema) | ✅ IMPLEMENTED |
-| `auth.py` — provider-neutral auth interface | ✅ IMPLEMENTED |
-| `auth_providers/glow_jwt.py` — Glow-signed JWT | ✅ IMPLEMENTED (new, this session) |
-| `consent.py` — granular, versioned, revocable consent | ✅ IMPLEMENTED |
-| `dependencies.py` — FastAPI auth/user/consent deps | ✅ IMPLEMENTED (fixed this session) |
-| `settings.py` — all env vars including auth + LLM | ✅ IMPLEMENTED (fixed this session) |
-| `test_auth.py` — JWT issue, validate, expire, rotate | ✅ IMPLEMENTED (new, this session) |
-| PostgreSQL for pilot/production (not SQLite) | 🔴 BLOCKED — no PG instance configured |
-| MFA / passkeys | ❌ NOT STARTED |
-| Device/session management | ❌ NOT STARTED |
+|| Item | Status |
+|---|---|---|
+|| SQLAlchemy ORM models: users, preferences, consents | ✅ IMPLEMENTED + not-empty enforcement added (this session) |
+|| Alembic migrations (initial schema) | ✅ IMPLEMENTED; **PENDING**: migration for `expected_verification_method` column |
+|| `auth.py` — provider-neutral auth interface | ✅ IMPLEMENTED |
+|| `auth_providers/glow_jwt.py` — Glow-signed JWT | ✅ IMPLEMENTED |
+|| `consent.py` — granular, versioned, revocable consent | ✅ IMPLEMENTED + `expected_verification_method` field added (this session) |
+|| `dependencies.py` — FastAPI auth/user/consent deps | ✅ IMPLEMENTED |
+|| `settings.py` — all env vars including auth + LLM | ✅ IMPLEMENTED; `cors_origins` removed (this session) |
+|| `test_auth.py` — JWT issue, validate, expire, rotate | ✅ IMPLEMENTED |
+|| DB auto-init on startup (create tables if missing) | ✅ IMPLEMENTED (this session) |
+|| Exception handlers: clean 401/403 JSON responses | ✅ IMPLEMENTED (this session) |
+|| PostgreSQL for pilot/production (not SQLite) | 🔴 BLOCKED — no PG instance configured |
+|| MFA / passkeys | ❌ NOT STARTED |
+|| Device/session management | ❌ NOT STARTED |
 
 ---
 
@@ -192,13 +194,17 @@ All 18 blockers in `docs/audio2face-decision-record.md` must be resolved. No pro
 
 ### Phase 12 — Admin, operations, launch readiness
 
-| Item | Status |
-|---|---|
-| `admin.py` — feature flags, kill switches, health checks, incident log | ✅ IMPLEMENTED |
-| Language-gate feature flags (`therapy_ar`, `therapy_es`, etc.) | ✅ IMPLEMENTED (this session) |
-| Launch checklist (`docs/launch-checklist.md`) | ✅ IMPLEMENTED (new, this session) |
-| Incident response procedures (`docs/incident-response.md`) | ✅ IMPLEMENTED (new, this session) |
-| CI/CD pipeline | 🔴 BLOCKED |
+|| Item | Status |
+|---|---|---|
+|| `admin.py` — feature flags, kill switches, health checks, incident log | ✅ IMPLEMENTED |
+|| Language-gate feature flags (`therapy_ar`, `therapy_es`, etc.) | ✅ IMPLEMENTED |
+|| Launch checklist (`docs/launch-checklist.md`) | ✅ IMPLEMENTED |
+|| Incident response procedures (`docs/incident-response.md`) | ✅ IMPLEMENTED |
+|| Deployment scaffolding: `Dockerfile`, `docker-compose.yml`, `DEPLOY.md` | ✅ IMPLEMENTED (this session) |
+|| Frontend `.env.local` with `NEXT_PUBLIC_API_URL` | ✅ IMPLEMENTED (this session) |
+|| Frontend `global.d.ts` for Tavus custom element | ✅ IMPLEMENTED (this session) |
+|| FQ `.gitignore` exclusions (glow.db, scratch scripts) | ⚠️ PARTIAL — local DB excluded from staging but `.gitignore` needs update |
+|| CI/CD pipeline | 🔴 BLOCKED |
 
 ---
 

@@ -17,6 +17,7 @@ import {
   ensureSession,
   startGlowSession,
   sendMessage,
+  getApiErrorMessage,
 } from "../../lib/glow-api";
 
 type Message = {
@@ -153,9 +154,8 @@ const handleSend = async (e: React.FormEvent) => {
       lastActivityRef.current = Date.now();
       noteActivity();
     } catch (err) {
-      console.error(err);
       setError(
-        "Glow couldn&apos;t reach its support service just now. If this is urgent, please contact your local emergency services or crisis line.",
+        `${getApiErrorMessage(err, "Glow could not respond just now. Please try again.")} If this is urgent, please contact your local emergency services or crisis line.`,
       );
     } finally {
       setBusy(false);

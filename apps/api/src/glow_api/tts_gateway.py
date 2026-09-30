@@ -127,39 +127,59 @@ class KokoroTtsGateway(TtsGateway):
         from glow_api.settings import settings
         self.model_id = settings.tts_model_id or "hexgrad/Kokoro-82M"
         self.voice_id = settings.tts_voice_id or "af_heart"
-        self._pipeline = None  # Lazy-loaded
+        self._kokoro = None  # Lazy-loaded Kokoro instance
 
     @property
     def is_configured(self) -> bool:
         return True  # Always configured; fails at inference time if `kokoro-onnx` not installed.
 
-    def _get_pipeline(self):
-        """Lazy-load the Kokoro ONNX model from .models/ (int8 CPU build).
-
-        Uses kokoro-onnx directly: the `kokoro` pip package (KPipeline) cannot
-        build on this environment, and kokoro-onnx is Apache-2.0 compatible.
-        """
-        if self._pipeline is None:
+    def _get_kokoro(self):
+        if self._kokoro is None:
             try:
+                from kokoro_onnx import Kokoro
+                from kokoro_onnx.config import EspeakConfig
                 import os
 
-                from kokoro_onnx import Kokoro
+                # Locate model files — try package data dir first, then fall back to known locations
+                pkg_dir = os.path.dirname(__import__("kokoro_onnx").__file__)
+                model_path = os.path.join(pkg_dir, "models", "kokoro-v0.10.5.onnx")
+                voices_path = os.path.join(pkg_dir, "models", "voices.json")
 
-                model_dir = os.path.join(os.getcwd(), ".models")
-                model_path = os.path.join(model_dir, "kokoro-v1.0.onnx")
-                voices_path = os.path.join(model_dir, "voices.bin")
-                if not (os.path.isfile(model_path) and os.path.isfile(voices_path)):
-                    raise RuntimeError(
-                        "Kokoro ONNX weights missing. Download kokoro-v1.0.onnx "
-                        "and voices.bin into .models/ (see docs)."
-                    )
-                self._pipeline = Kokoro(model_path, voices_path)
+                # Fall back to user-level model cache if package data not found
+                if not os.path.exists(model_path):
+                    alt_model = os.path.expanduser("~/.models/kokoro-v1.0.onnx")
+                    if os.path.exists(alt_model):
+                        model_path = alt_model
+                    else:
+                        raise RuntimeError(
+                            f"Kokoro model not found. Expected at {model_path} "
+                            "or~/.models/kokoro-v1.0.onnx. "
+                            "Download the model from HuggingFace (hexgrad/Kokoro-82M) "
+                            "and place it in one of those locations."
+                        )
+                if not os.path.exists(voices_path):
+                    # Try .bin extension (older Kokoro releases use .bin for voices)
+                    alt_voices_bin = voices_path.replace(".json", ".bin")
+                    alt_voices_home = os.path.expanduser("~/.models/voices.bin")
+                    if os.path.exists(alt_voices_bin):
+                        voices_path = alt_voices_bin
+                    elif os.path.exists(alt_voices_home):
+                        voices_path = alt_voices_home
+                    else:
+                        raise RuntimeError(
+                            f"Voices file not found. Expected at {voices_path} "
+                            "or~/.models/voices.json or~/.models/voices.bin. "
+                            "Download voices data from the Kokoro model repo."
+                        )
+
+                espeak_config = EspeakConfig()
+                self._kokoro = Kokoro(model_path, voices_path, espeak_config=espeak_config)
             except ImportError as e:
                 raise RuntimeError(
                     "Kokoro TTS package is not installed. "
                     "Run: pip install kokoro-onnx soundfile"
                 ) from e
-        return self._pipeline
+        return self._kokoro
 
     async def synthesize(self, request: SynthesizeRequest) -> SynthesizeResponse:
         start_time = time.perf_counter()
@@ -167,42 +187,18 @@ class KokoroTtsGateway(TtsGateway):
         def _run_sync() -> bytes:
             import io
 
-            import numpy as np
             import soundfile as sf
 
-            pipeline = self._get_pipeline()
+            kokoro = self._get_kokoro()
 
-            # Language-aware voice selection: Kokoro natively supports
-            # en/es/fr/ja/zh accents. Unsupported languages fall back to the
-            # default English voice rather than failing.
-            _LANG_MAP = {
-                "en": ("af_heart", "en-us"),
-                "es": ("ef_dora", "es"),
-                "fr": ("ff_siwis", "en-us"),  # French voice, fr accent pack
-                "ja": ("jf_alpha", "ja"),
-                "zh": ("zf_xiaobei", "zh"),
-                "ar": (self.voice_id or "af_heart", "en-us"),  # no native AR yet
-            }
-            detected = (request.language or "en").lower()[:2]
-            voice_id, lang_code = _LANG_MAP.get(detected, (self.voice_id or "af_heart", "en-us"))
+            # kokoro_onnx.Kokoro.create() returns (audio_array, sample_rate)
+            audio, sr = kokoro.create(request.text, voice=request.voice_id or self.voice_id)
 
-            # kokoro-onnx Kokoro.create() synthesizes the full utterance at once
-            audio, sr = pipeline.create(
-                request.text,
-                voice=voice_id,
-                speed=1.0,
-                lang=lang_code,
-            )
-            audio_segments = [audio]
-            sample_rate = sr
-
-            if not audio_segments:
-                raise RuntimeError("Kokoro returned no audio segments.")
-
-            combined = np.concatenate(audio_segments)
+            if audio is None or len(audio) == 0:
+                raise RuntimeError("Kokoro returned no audio.")
 
             buf = io.BytesIO()
-            sf.write(buf, combined, samplerate=sample_rate, format="WAV", subtype="PCM_16")
+            sf.write(buf, audio, samplerate=sr, format="WAV", subtype="PCM_16")
             return buf.getvalue()
 
         loop = asyncio.get_running_loop()

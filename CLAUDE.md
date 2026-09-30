@@ -396,7 +396,7 @@ All variables use the `GLOW_` prefix. See `.env.example` for the complete list. 
 | `GLOW_STT_DEVICE` | `auto` | Phase 6B | `cuda` \| `cpu` \| `auto` |
 | `GLOW_STT_COMPUTE_TYPE` | `auto` | Phase 6B | `float16` \| `int8` \| `default` |
 | `GLOW_TTS_MODEL_ID` | `hexgrad/Kokoro-82M` | Phase 6C | Kokoro TTS model checkpoint |
-| `GLOW_TTS_VOICE_ID` | `af_heart` | Phase 6C | Default voice persona for Kokoro |
+|| `GLOW_TTS_VOICE_ID` | `a` | Phase 6C | Default voice persona for Kokoro |
 | `ENABLE_LIVE_PROVIDER_TESTS` | — | Test gate | Set to `1` to run tests that call real providers |
 
 ### Source directory structure (as of 2026-08-25)
@@ -438,6 +438,7 @@ apps/
       logging.py                — structured logging configuration
       routers/
         session_router.py       — session + voice endpoints
+        session_extras.py       — mood / history / summary / doctor-prep endpoints
         memory_router.py        — memory CRUD endpoints (Phase 7)
         notes_router.py         — notes + summary endpoints (Phase 8)
         assessment_router.py    — screening endpoints (Phase 9)

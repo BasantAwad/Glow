@@ -151,37 +151,25 @@
 
 
 ## Current phase
-Phase 6 (Real Provider Integrations Planning)
+Phase 6C complete (Kokoro TTS, Apache 2.0, commercial-safe); Phase 6D partial (WebSocket wired, TTS/STT not yet live-tested). Phase 7+ complete in code (memory, notes, assessment, billing). Frontend complete (text chat, Tavus embed, exercises, history, crisis bar, mood check-in, multi-language). Deployment scaffolding complete (Dockerfile, docker-compose, DEPLOY.md). Database auto-init and exception handlers added. 
 
 ## Real providers integrated
-None yet (Phase 6A pending). Previously using MockModelGateway and LocalDevKMS.
-
-## Model IDs and versions
-Pending user API key provision.
-
-## Context continuity verification
-Pending real LLM integration.
-
-## STT/TTS verification
-Pending real STT/TTS integration.
-
-## Avatar status
-Blocked until real STT/TTS are functional.
-
-## Real sources and licenses verified
-None yet.
-
-## Tests and live smoke tests
-Pending real provider implementation.
-
-## Safety/privacy/security impact
-Eliminating mocks ensures the safety control plane handles real-world non-deterministic LLM behavior, critical for clinical safety. 
+TTS: Kokoro (local, Apache 2.0) — code complete, not yet live-tested. STT: FasterWhisper (local) — code complete, not yet live-tested. LLM: vLLM/Qwen2.5-14B — gateway complete, not yet live-tested.
 
 ## Remaining human-review blockers
-Missing API keys for Phase 6A (Text LLM) and Phase 6B/6C (Voice).
-
-## Exact next task
-Awaiting user approval on the revised implementation plan and the provision of an API key for the Text LLM (Phase 6A).
+1. Alembic migration for `expected_verification_method` column (consent_records)
+2. Production PostgreSQL migration (SQLite → PostgreSQL with pgvector)
+3. vLLM endpoint running for LLM live tests
+4. faster-whisper + kokoro-onnx installed for STT/TTS live tests
+5. Tavus CORS/HTTPS configuration for production frontend
+6. Kokoro model files distributed to container (volume mount or download)
+7. Egypt crisis resource registry (clinical/legal review)
+8. Non-English clinical review (ar/es/ja/zh)
+9. Clinical instrument validation for assessment tools
+10. Egyptian legal/privacy/regulatory review
+11. Avatar: 18 blockers in audio2face-decision-record.md
+12. Payment provider selection and review
+13. Human clinical review of AI system overall
 
 ---
 
@@ -359,5 +347,6 @@ Awaiting user approval on the revised implementation plan and the provision of a
      -   M o d i f i e d   l i v e - p r o v i d e r   t e s t s   t o   f a i l   e x p l i c i t l y   r a t h e r   t h a n   s k i p   s i l e n t l y   w h e n   E N A B L E _ L I V E _ P R O V I D E R _ T E S T S = 1   b u t   p r o v i d e r s   a r e   u n c o n f i g u r e d . 
  -   * * C o m m a n d s / r e s u l t s : * *   g i t   d i f f   c h e c k s   c o n f i r m e d   n o   s e c r e t s   e x p o s e d .   P y t e s t   r u n   c o n f i r m e d   d e t e r m i n i s t i c   t e s t s   p a s s ,   w h i l e   l i v e   t e s t s   f a i l   e x p l i c i t l y   d u e   t o   m i s s i n g   c o n f i g u r a t i o n s . 
  -   * * E x a c t   n e x t   s t e p s : * *   P r e s e n t   f i n d i n g s   t o   t h e   u s e r   a n d   a w a i t   i n s t r u c t i o n   b e f o r e   a t t e m p t i n g   A v a t a r ,   P o s t g r e s ,   o r   A u t h   c h a n g e s . 
-  
+ 
+ 
  

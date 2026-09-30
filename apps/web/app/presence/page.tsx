@@ -1,20 +1,5 @@
 "use client";
 
-/**
- * Presence — unified voice session with presenter mode selector.
- *
- * Users can switch between:
- *  - "orb"    : Breathing aurora orb (abstract, no face)
- *  - "avatar" : VRM humanoid avatar (animated, not realistic)
- *  - "tavus"  : Tavus realistic video persona (requires NEXT_PUBLIC_TAVUS_* config)
- *
- * Mic is acquired BEFORE the WebSocket opens to avoid the silent-failure
- * bug where getUserMedia inside ws.onopen never surfaces errors.
- *
- * VRM avatar: scene.rotation.y = Math.PI to face the camera (VRM0 faces -Z by default).
- * Presentation layer only — never influences safety decisions.
- */
-
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Mic, Square, Volume2, Sparkles, User, Video } from "lucide-react";
 import { useLanguage } from "../../contexts/LanguageContext";
@@ -24,12 +9,8 @@ type Phase = "idle" | "connecting" | "recording" | "thinking" | "speaking";
 type PresenterMode = "avatar" | "tavus";
 
 const AVATAR_URL = process.env.NEXT_PUBLIC_GLOW_AVATAR_URL ?? "/avatar.vrm";
-// Paste your Tavus deployment ID into NEXT_PUBLIC_TAVUS_DEPLOYMENT_ID in .env.local
-// e.g. NEXT_PUBLIC_TAVUS_DEPLOYMENT_ID=6e550748-e56b-43c4-b4a3-80b78e38c1cd
-// Use env var if present, otherwise fallback to the user's provided deployment ID
 const TAVUS_DEPLOYMENT_ID = process.env.NEXT_PUBLIC_TAVUS_DEPLOYMENT_ID || "6e550748-e56b-43c4-b4a3-80b78e38c1cd";
 
-/* ─── WAV encoder ─────────────────────────────────────────────────────────── */
 function encodeWav(samples: Float32Array, sampleRate = 16000): Blob {
   const buf = new ArrayBuffer(44 + samples.length * 2);
   const view = new DataView(buf);
@@ -57,26 +38,16 @@ function encodeWav(samples: Float32Array, sampleRate = 16000): Blob {
   return new Blob([view], { type: "audio/wav" });
 }
 
-/* ─── Mode selector pill ──────────────────────────────────────────────────── */
 interface ModeSelectorProps {
   mode: PresenterMode;
   onChange: (m: PresenterMode) => void;
   disabled: boolean;
 }
+
 function ModeSelector({ mode, onChange, disabled }: ModeSelectorProps) {
   const options: { id: PresenterMode; label: string; icon: React.ReactNode; available: boolean }[] = [
-    {
-      id: "avatar",
-      label: "Avatar",
-      icon: <User className="size-4" />,
-      available: true,
-    },
-    {
-      id: "tavus",
-      label: "Realistic",
-      icon: <Video className="size-4" />,
-      available: !!TAVUS_DEPLOYMENT_ID,
-    },
+    { id: "avatar", label: "Avatar", icon: <User className="size-4" />, available: true },
+    { id: "tavus", label: "Realistic", icon: <Video className="size-4" />, available: !!TAVUS_DEPLOYMENT_ID },
   ];
 
   return (
@@ -87,28 +58,23 @@ function ModeSelector({ mode, onChange, disabled }: ModeSelectorProps) {
           onClick={() => !disabled && opt.available && onChange(opt.id)}
           disabled={disabled || !opt.available}
           title={!opt.available ? "Add NEXT_PUBLIC_TAVUS_DEPLOYMENT_ID to .env.local to enable" : undefined}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200
-            ${mode === opt.id
+          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
+            mode === opt.id
               ? "aurora halo text-primary-foreground"
               : opt.available
                 ? "text-muted-foreground hover:text-foreground"
                 : "text-muted-foreground/30 cursor-not-allowed"
-            }`}
+          }`}
         >
           {opt.icon}
           {opt.label}
-          {!opt.available && (
-            <span className="text-[10px] ml-1 opacity-60">soon</span>
-          )}
+          {!opt.available && <span className="text-[10px] ml-1 opacity-60">soon</span>}
         </button>
       ))}
     </div>
   );
 }
 
-
-
-/* ─── VRM Avatar presenter ───────────────────────────────────────────────── */
 interface AvatarPresenterProps {
   phase: Phase;
   speaking: boolean;
@@ -138,9 +104,6 @@ function AvatarPresenter({ phase: _phase, speaking, onLoaded, onError }: AvatarP
         const h = mount.clientHeight || 640;
 
         const scene = new THREE.Scene();
-
-        // Camera faces the avatar from the front (+Z side).
-        // VRM 0.x models face -Z by default, so we rotate the scene 180° below.
         const camera = new THREE.PerspectiveCamera(22, w / h, 0.1, 100);
         camera.position.set(0, 1.38, 2.5);
         camera.lookAt(0, 1.3, 0);
@@ -151,7 +114,6 @@ function AvatarPresenter({ phase: _phase, speaking, onLoaded, onError }: AvatarP
         renderer.outputColorSpace = THREE.SRGBColorSpace;
         mount.appendChild(renderer.domElement);
 
-        // Warm purple-pink studio lighting
         scene.add(new THREE.AmbientLight(0xffffff, 1.2));
         const key = new THREE.DirectionalLight(0xd0b8ff, 1.8);
         key.position.set(1.5, 3, 2.5);
@@ -182,10 +144,7 @@ function AvatarPresenter({ phase: _phase, speaking, onLoaded, onError }: AvatarP
             }
 
             VRMUtils.removeUnnecessaryJoints(vrm.scene);
-
-            // VRM 0.x faces -Z; rotate scene 180° so it faces the camera at +Z.
             vrm.scene.rotation.y = Math.PI;
-
             scene.add(vrm.scene);
             onLoaded();
 
@@ -199,11 +158,9 @@ function AvatarPresenter({ phase: _phase, speaking, onLoaded, onError }: AvatarP
               const delta = clock.getDelta();
               elapsed += delta;
 
-              // Gentle idle breathing sway (keep small so it doesn't look wrong)
               vrm.scene.rotation.y = Math.PI + Math.sin(elapsed * 0.35) * 0.04;
 
               if (speakingRef.current) {
-                // Pseudo-viseme cycle — reads as natural speech motion
                 const cycle = (elapsed * 9) % 3;
                 const visemes: Array<[string, number]> =
                   cycle < 1
@@ -236,9 +193,7 @@ function AvatarPresenter({ phase: _phase, speaking, onLoaded, onError }: AvatarP
           undefined,
           () => {
             if (disposed) return;
-            onError(
-              "No avatar model found. Drop a .vrm file into apps/web/public/avatar.vrm — voice still works without it.",
-            );
+            onError("No avatar model found. Drop a .vrm file into apps/web/public/avatar.vrm — voice still works without it.");
           },
         );
       } catch (err) {
@@ -254,16 +209,9 @@ function AvatarPresenter({ phase: _phase, speaking, onLoaded, onError }: AvatarP
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return (
-    <div
-      ref={mountRef}
-      className="w-full h-full absolute inset-0"
-      aria-label="3D avatar"
-    />
-  );
+  return <div ref={mountRef} className="w-full h-full absolute inset-0" aria-label="3D avatar" />;
 }
 
-/* ─── Tavus presenter ───────────────────────────────────────────────────── */
 function TavusPresenter({ speaking: _speaking }: { speaking: boolean }) {
   useEffect(() => {
     if (TAVUS_DEPLOYMENT_ID && !document.querySelector('script[src="https://unpkg.com/@tavus/embed@latest"]')) {
@@ -281,9 +229,7 @@ function TavusPresenter({ speaking: _speaking }: { speaking: boolean }) {
           <Video className="size-8 mx-auto mb-3 opacity-40" />
           <p className="font-medium mb-1">Realistic therapist</p>
           <p className="opacity-60 text-xs">
-            Add{" "}
-            <code className="opacity-80">NEXT_PUBLIC_TAVUS_DEPLOYMENT_ID</code>{" "}
-            to <code className="opacity-80">.env.local</code> to enable.
+            Add <code className="opacity-80">NEXT_PUBLIC_TAVUS_DEPLOYMENT_ID</code> to <code className="opacity-80">.env.local</code> to enable.
           </p>
         </div>
       </div>
@@ -292,19 +238,16 @@ function TavusPresenter({ speaking: _speaking }: { speaking: boolean }) {
 
   return (
     <div className="w-full h-full relative overflow-hidden rounded-3xl">
-      {/* @ts-ignore - Custom element from Tavus script */}
       <tavus-embed deployment-id={TAVUS_DEPLOYMENT_ID}></tavus-embed>
     </div>
   );
 }
 
-/* ─── Main page ──────────────────────────────────────────────────────────── */
 export default function PresencePage() {
   const { t } = useLanguage();
   const [mode, setMode] = useState<PresenterMode>("tavus");
   const [phase, setPhase] = useState<Phase>("idle");
   const [loadingAvatar, setLoadingAvatar] = useState(false);
-  const [captionUser, setCaptionUser] = useState("");
   const [captionGlow, setCaptionGlow] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [speaking, setSpeaking] = useState(false);
@@ -327,16 +270,13 @@ export default function PresencePage() {
 
   useEffect(() => () => cleanupRecording(), [cleanupRecording]);
 
-  /* Switch avatar loading state when mode changes */
   useEffect(() => {
     setLoadingAvatar(mode === "avatar");
   }, [mode]);
 
-  /* ── Start recording: acquire mic FIRST, then open WS ── */
   const startListening = useCallback(async () => {
     setError(null);
     setPhase("connecting");
-    setCaptionUser("");
     setCaptionGlow("");
 
     let stream: MediaStream;
@@ -367,9 +307,7 @@ export default function PresencePage() {
       }
       const { token } = await ensureSession();
 
-      const ws = new WebSocket(
-        `${voiceSocketUrl(sessionIdRef.current!)}?token=${encodeURIComponent(token)}`,
-      );
+      const ws = new WebSocket(`${voiceSocketUrl(sessionIdRef.current!)}?token=${encodeURIComponent(token)}`);
       socketRef.current = ws;
 
       ws.onopen = () => {
@@ -384,17 +322,12 @@ export default function PresencePage() {
         proc.onaudioprocess = (ev) =>
           chunksRef.current.push(new Float32Array(ev.inputBuffer.getChannelData(0)));
         src.connect(proc);
-        proc.connect(ctx.destination); // ScriptProcessor requires an output node to fire
+        proc.connect(ctx.destination);
       };
 
       ws.onmessage = (event) => {
         if (typeof event.data === "string") {
-          const msg = JSON.parse(event.data) as {
-            type: string;
-            text?: string;
-            message?: string;
-          };
-          if (msg.type === "stt_final" && msg.text) setCaptionUser(msg.text);
+          const msg = JSON.parse(event.data) as { type: string; text?: string; message?: string };
           if (msg.type === "llm_reply" && msg.text) {
             setCaptionGlow(msg.text);
             setPhase("speaking");
@@ -404,7 +337,6 @@ export default function PresencePage() {
             setPhase("idle");
           }
         } else {
-          // Binary frame = TTS WAV → play and animate mouth
           const blob = new Blob([event.data as BlobPart], { type: "audio/wav" });
           const url = URL.createObjectURL(blob);
           const audio = new Audio(url);
@@ -465,73 +397,65 @@ export default function PresencePage() {
 
   return (
     <main className="flex-1 flex flex-col items-center max-w-3xl w-full mx-auto p-4 sm:p-6 lg:p-8">
-      {/* Header */}
       <div className="flex flex-col items-center mb-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
         <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-center font-display">
           {mode === "avatar" ? "Meet your companion" : "Realistic session"}
         </h1>
-        <p className="mt-2 text-muted-foreground text-center text-sm">
-          Talk naturally. Captions always on.
-        </p>
+        <p className="mt-2 text-muted-foreground text-center text-sm">Talk naturally. Captions always on.</p>
       </div>
 
-      {/* Mode selector */}
       <ModeSelector mode={mode} onChange={setMode} disabled={isActive} />
 
-      {/* Presenter area */}
       <div className="glass rounded-3xl overflow-hidden w-full max-w-sm aspect-[3/4] relative mb-2">
         {mode === "avatar" && (
-            <>
-              {loadingAvatar && (
-                <div className="absolute inset-0 flex items-center justify-center gap-2 text-muted-foreground z-10">
-                  <Loader2 className="size-5 animate-spin" />
-                  <span className="text-sm">{t("avatar.loading")}</span>
-                </div>
-              )}
-              <AvatarPresenter
-                phase={phase}
-                speaking={speaking}
-                onLoaded={() => setLoadingAvatar(false)}
-                onError={(msg) => {
-                  setLoadingAvatar(false);
-                  setError(msg);
-                }}
-              />
-            </>
-          )}
-          {mode === "tavus" && <TavusPresenter speaking={speaking} />}
+          <>
+            {loadingAvatar && (
+              <div className="absolute inset-0 flex items-center justify-center gap-2 text-muted-foreground z-10">
+                <Loader2 className="size-5 animate-spin" />
+                <span className="text-sm">{t("avatar.loading")}</span>
+              </div>
+            )}
+            <AvatarPresenter
+              phase={phase}
+              speaking={speaking}
+              onLoaded={() => setLoadingAvatar(false)}
+              onError={(msg) => {
+                setLoadingAvatar(false);
+                setError(msg);
+              }}
+            />
+          </>
+        )}
+        {mode === "tavus" && <TavusPresenter speaking={speaking} />}
 
-          {/* Caption overlay */}
-          {mode !== "tavus" && phase !== "idle" && (
-            <div className="absolute bottom-3 left-3 right-3 glass rounded-2xl px-4 py-2.5 flex items-center gap-2 z-20">
-              {phase === "thinking" ? (
-                <Loader2 className="size-3.5 animate-spin shrink-0 text-muted-foreground" />
-              ) : phase === "recording" ? (
-                <Mic className="size-3.5 shrink-0 animate-pulse text-primary" />
-              ) : phase === "speaking" ? (
-                <Volume2 className="size-3.5 shrink-0 text-primary" />
-              ) : null}
-              <span className="text-xs truncate text-foreground/80">
-                {phase === "recording"
-                  ? t("voice.recording")
-                  : phase === "thinking"
-                    ? t("voice.thinking")
-                    : phase === "speaking"
-                      ? captionGlow || t("voice.speaking")
-                      : t("voice.connecting")}
-              </span>
-            </div>
-          )}
+        {mode !== "tavus" && phase !== "idle" && (
+          <div className="absolute bottom-3 left-3 right-3 glass rounded-2xl px-4 py-2.5 flex items-center gap-2 z-20">
+            {phase === "thinking" ? (
+              <Loader2 className="size-3.5 animate-spin shrink-0 text-muted-foreground" />
+            ) : phase === "recording" ? (
+              <Mic className="size-3.5 shrink-0 animate-pulse text-primary" />
+            ) : phase === "speaking" ? (
+              <Volume2 className="size-3.5 shrink-0 text-primary" />
+            ) : null}
+            <span className="text-xs truncate text-foreground/80">
+              {phase === "recording"
+                ? t("voice.recording")
+                : phase === "thinking"
+                  ? t("voice.thinking")
+                  : phase === "speaking"
+                    ? captionGlow || t("voice.speaking")
+                    : t("voice.connecting")}
+            </span>
+          </div>
+        )}
       </div>
 
-      {/* Captions below presenter */}
       {mode !== "tavus" && captionGlow && phase === "idle" && (
         <div className="glass rounded-2xl px-5 py-3 mt-4 w-full max-w-sm text-sm leading-relaxed">
           {captionGlow}
         </div>
       )}
 
-      {/* Mic button and status */}
       {mode !== "tavus" && (
         <>
           <button
@@ -553,25 +477,26 @@ export default function PresencePage() {
 
           <p className="text-sm text-muted-foreground flex items-center gap-2 mb-4">
             {phase === "speaking" && <Volume2 className="size-4" />}
-            {phase === "idle" ? t("voice.start") :
-            phase === "connecting" ? t("voice.connecting") :
-            phase === "recording" ? t("voice.recording") :
-            phase === "thinking" ? t("voice.thinking") :
-            t("voice.speaking")}
+            {phase === "idle"
+              ? t("voice.start")
+              : phase === "connecting"
+                ? t("voice.connecting")
+                : phase === "recording"
+                  ? t("voice.recording")
+                  : phase === "thinking"
+                    ? t("voice.thinking")
+                    : t("voice.speaking")}
           </p>
         </>
       )}
 
-      {/* Error */}
       {error && (
         <div className="glass border border-destructive/40 rounded-2xl px-5 py-4 text-sm w-full max-w-sm">
           {error}
         </div>
       )}
 
-      <p className="mt-auto pt-6 text-xs text-muted-foreground/60 text-center">
-        {t("voice.disclaimer")}
-      </p>
+      <p className="mt-auto pt-6 text-xs text-muted-foreground/60 text-center">{t("voice.disclaimer")}</p>
     </main>
   );
 }

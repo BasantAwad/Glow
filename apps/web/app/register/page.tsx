@@ -7,6 +7,7 @@ import { motion } from "framer-motion";
 import { Loader2, Heart, ShieldCheck, Info } from "lucide-react";
 import { apiRegister } from "../../lib/auth";
 import { useLanguage } from "../../contexts/LanguageContext";
+import { getApiErrorMessage } from "../../lib/glow-api";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -37,7 +38,7 @@ export default function RegisterPage() {
       });
       router.push("/chat");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Registration failed");
+      setError(getApiErrorMessage(err, "Registration failed. Please check your details and try again."));
     } finally {
       setBusy(false);
     }

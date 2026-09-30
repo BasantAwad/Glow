@@ -11,6 +11,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Check, Loader2, ShieldCheck } from "lucide-react";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { authFetch } from "../../lib/auth";
+import { getApiErrorMessage } from "../../lib/glow-api";
 
 type Status = {
   free_sessions_remaining: number;
@@ -79,7 +80,7 @@ export default function BillingPage() {
       // Redirect to Paymob's hosted checkout (PCI scope stays with Paymob).
       window.location.href = data.checkout_url;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Payment could not start");
+      setError(getApiErrorMessage(err, "Payment could not start. Please try again."));
       setBusy(false);
     }
   };

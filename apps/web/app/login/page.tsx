@@ -7,6 +7,7 @@ import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
 import { apiLogin, clearStoredAuth } from "../../lib/auth";
 import { useLanguage } from "../../contexts/LanguageContext";
+import { getApiErrorMessage } from "../../lib/glow-api";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -25,8 +26,7 @@ export default function LoginPage() {
       await apiLogin(email, password);
       router.push("/chat");
     } catch (err) {
-      // Generic message; the server already avoids revealing account existence.
-      setError(err instanceof Error ? err.message : "Sign in failed");
+      setError(getApiErrorMessage(err, "Sign in failed. Please try again."));
     } finally {
       setBusy(false);
     }
