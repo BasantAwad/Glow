@@ -86,8 +86,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         db_manager.initialize()
+        await _ensure_tables()
         yield
         await db_manager.close()
+
+    async def _ensure_tables() -> None:
+        """Create tables synchronously after engine init."""
+        if db_manager._engine is None:
+            logger.warning("No DB engine — skipping table creation")
+            return
+        from glow_api.database import Base
+        async with db_manager._engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("Database tables created/verified")
 
     app = FastAPI(
         title="Glow API",
@@ -145,9 +156,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         return response
 
+    from glow_api.routers.session_history import router as session_history_router
+
     app.include_router(session_router)
     app.include_router(avatar_router)
     app.include_router(session_extras_router)
+    app.include_router(session_history_router)
     app.include_router(dev_bootstrap_router)
     app.include_router(account_router)
     app.include_router(billing_router)

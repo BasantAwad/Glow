@@ -1,205 +1,265 @@
 "use client";
 
-import { useState } from "react";
+/**
+ * Reflections — your real session history, wired to the backend.
+ *
+ * Fetches actual session summaries from /sessions, shows previews,
+ * and generates doctor-shareable summaries from real transcript data.
+ */
+
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
+import { Search, Loader2, Copy, Download, MessageCircle, Clock, AlertTriangle } from "lucide-react";
+import { authFetch } from "../../lib/auth";
 import { useLanguage } from "../../contexts/LanguageContext";
+import { getApiErrorMessage } from "../../lib/glow-api";
 
-const sessionHistory: SessionRecord[] = [];
+type SessionSummary = {
+  id: number;
+  session_id: string;
+  state: string;
+  mode: string;
+  created_at: string;
+  started_at: string | null;
+  closed_at: string | null;
+  is_crisis: boolean;
+  closure_reason: string | null;
+  message_count: number;
+  preview: string | null;
+};
 
-interface SessionRecord {
-  id: string;
-  date: string;
-  duration: string;
-  moodBefore: number | null;
-  moodAfter: number | null;
+type DoctorSummary = {
+  session_id: string;
+  session_date: string;
+  duration_minutes: number | null;
   preview: string;
-}
+  full_text: string;
+};
 
-export default function HistoryPage() {
+export default function ReflectionsPage() {
+  const router = useRouter();
   const { t } = useLanguage();
+  const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [selectedSession, setSelectedSession] = useState<SessionRecord | null>(null);
-  const [doctorPrepOpen, setDoctorPrepOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [doctorOpen, setDoctorOpen] = useState(false);
+  const [doctorSummary, setDoctorSummary] = useState<DoctorSummary | null>(null);
+  const [copyCopied, setCopyCopied] = useState(false);
 
-  // In a real app, this data comes from the backend
-  // For now, seed with realistic sample data
-  const [sessions, setSessions] = useState<SessionRecord[]>([
-    {
-      id: "sess-001",
-      date: "2026-08-28",
-      duration: "42 min",
-      moodBefore: 2,
-      moodAfter: 3,
-      preview: "Talked about feeling overwhelmed at work. Dr. Sarah helped me untangle what's actually mine vs. what belongs to the team.",
-    },
-    {
-      id: "sess-002",
-      date: "2026-08-25",
-      duration: "58 min",
-      moodBefore: 1,
-      moodAfter: 2,
-      preview: "I was really low today. We did a body scan and I realized I've been holding tension in my shoulders for weeks.",
-    },
-    {
-      id: "sess-003",
-      date: "2026-08-20",
-      duration: "35 min",
-      moodBefore: 3,
-      moodAfter: 4,
-      preview: "First session. I wasn't sure what to say but Dr. Sarah made it okay. We talked about my sleep and I realized it's been terrible for a month.",
-    },
-  ]);
+  const loadSessions = useCallback(async () => {
+    try {
+      const res = await authFetch("/sessions");
+      if (!res.ok) {
+        if (res.status === 401) { router.push("/login"); return; }
+        throw new Error("failed");
+      }
+      const data: SessionSummary[] = await res.json();
+      setSessions(data);
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Could not load session history."));
+    } finally {
+      setLoading(false);
+    }
+  }, [router]);
 
-  const filtered = sessions.filter((s) =>
-    s.preview.toLowerCase().includes(search.toLowerCase()) ||
-    s.date.includes(search)
-  );
+  useEffect(() => {
+    void Promise.resolve().then(() => loadSessions());
+  }, [loadSessions]);
 
-  const formatDate = (dateStr: string) => {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString([], { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  const loadDoctorSummary = useCallback(async (sessionId: string) => {
+    try {
+      const res = await authFetch(`/sessions/${sessionId}/doctor-summary`);
+      if (res.ok) {
+        const data: DoctorSummary = await res.json();
+        setDoctorSummary(data);
+      }
+    } catch {
+      // Silently fail — modal still opens with cached data
+    }
+  }, []);
+
+  const openDoctor = (session: SessionSummary) => {
+    setSelectedId(session.id);
+    setDoctorOpen(true);
+    loadDoctorSummary(session.session_id);
   };
 
-  const moodLabel = (m: number | null): string => {
-    if (m === null) return "—";
-    const labels: Record<number, string> = { 1: "Very low", 2: "Low", 3: "Okay", 4: "Good", 5: "Great" };
-    return labels[m] || "—";
+  const copySummary = async () => {
+    if (!doctorSummary) return;
+    try {
+      await navigator.clipboard.writeText(doctorSummary.full_text);
+      setCopyCopied(true);
+      setTimeout(() => setCopyCopied(false), 2000);
+    } catch {
+      // clipboard not available
+    }
   };
 
-  const generateDoctorPrep = (session: SessionRecord): string => {
-    return `MENTAL HEALTH SESSION SUMMARY
-Date: ${formatDate(session.date)}
-Duration: ${session.duration}
-
-MOOD
-Before: ${moodLabel(session.moodBefore)}
-After: ${moodLabel(session.moodAfter)}
-
-WHAT I SHARED
-${session.preview}
-
-NOTES FOR MY DOCTOR
-- Review the above and discuss what might help.
-- If physical symptoms were mentioned (sleep, appetite, energy, pain),
-  ask about possible medical causes (thyroid, anemia, vitamin D, etc.).
-- Consider whether any medication adjustments are appropriate.
-- Ask about referral options if needed.
-
-This summary was generated by Glow, an AI support tool.
-It is not a medical document — please use it as a conversation
-starter with your healthcare provider.
-`;
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  };
-
-  const downloadAsText = (text: string, filename: string) => {
-    const blob = new Blob([text], { type: "text/plain" });
+  const downloadSummary = () => {
+    if (!doctorSummary) return;
+    const blob = new Blob([doctorSummary.full_text], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = filename;
+    a.download = `glow-summary-${doctorSummary.session_date}.txt`;
     a.click();
     URL.revokeObjectURL(url);
+    setDoctorOpen(false);
   };
+
+  const formatDate = (iso: string) => {
+    try {
+      return new Date(iso).toLocaleDateString(undefined, {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+    } catch {
+      return iso;
+    }
+  };
+
+  const filtered = sessions.filter(
+    (s) =>
+      s.preview?.toLowerCase().includes(search.toLowerCase()) ||
+      formatDate(s.created_at).toLowerCase().includes(search.toLowerCase())
+  );
+
+  const moodLabel = (state: string) => {
+    if (state === "crisis") return "Crisis";
+    if (state === "closed") return "Closed";
+    if (state === "active") return "Active";
+    return state;
+  };
+
+  if (loading) {
+    return (
+      <main className="flex-1 flex items-center justify-center">
+        <Loader2 className="size-8 animate-spin text-muted-foreground" />
+      </main>
+    );
+  }
 
   return (
     <main className="flex-1 flex flex-col max-w-5xl w-full mx-auto p-4 sm:p-6 lg:p-8 h-[calc(100vh-160px)]">
       <div className="flex flex-col items-center mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
         <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-center">
-          {t("history.title")}
+          {t("reflections.title")}
         </h1>
+        <p className="mt-2 text-sm text-muted-foreground text-center max-w-md">
+          {t("reflections.subtitle")}
+        </p>
       </div>
 
-      {/* Header row */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={t("history.searchPlaceholder")}
-          className="flex-1 glass rounded-2xl px-5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground/50"
-        />
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">
-            {filtered.length} session{filtered.length !== 1 ? "s" : ""}
-          </span>
+      {/* Search */}
+      <div className="flex gap-3 mb-6 max-w-md mx-auto w-full animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <div className="relative flex-1">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-muted-foreground/50" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t("history.searchPlaceholder")}
+            className="w-full glass rounded-2xl pl-10 pr-5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          />
         </div>
+        <span className="text-xs text-muted-foreground shrink-0">
+          {filtered.length} {t("history.title").toLowerCase()}
+        </span>
       </div>
+
+      {/* Error */}
+      {error && (
+        <div className="mb-4 glass border border-destructive/30 rounded-2xl px-5 py-3 text-sm text-destructive animate-in fade-in duration-300">
+          {error}
+        </div>
+      )}
 
       {/* Session list */}
       {filtered.length === 0 ? (
-        <div className="glass rounded-3xl p-8 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <p className="text-muted-foreground mb-4">{t("history.empty")}</p>
+        <div className="glass rounded-3xl p-10 text-center animate-in fade-in slide-in-from-bottom-4 duration-500 h-full flex flex-col items-center justify-center">
+          <MessageCircle className="size-8 text-muted-foreground/30 mb-3" />
+          <p className="text-muted-foreground">{t("history.empty")}</p>
           {sessions.length > 0 && search && (
-            <p className="text-xs text-muted-foreground/60">No sessions match &quot;{search}&quot;</p>
+            <p className="text-xs text-muted-foreground/60 mt-1">No sessions match &quot;{search}&quot;</p>
+          )}
+          {sessions.length === 0 && (
+            <button
+              onClick={loadSessions}
+              className="mt-4 glass-soft rounded-full px-6 py-3 text-sm hover:bg-white/10 transition-colors"
+            >
+              Retry
+            </button>
           )}
         </div>
       ) : (
-        <div className="flex-1 space-y-3 overflow-y-auto pr-2">
+        <div className="flex-1 space-y-2 overflow-y-auto pr-1">
           {filtered.map((session) => (
-            <div
+            <motion.div
               key={session.id}
-              className="glass rounded-2xl p-5 transition-all hover:bg-white/5 cursor-pointer hover:shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300"
-              onClick={() => setSelectedSession(selectedSession?.id === session.id ? null : session)}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`glass rounded-2xl p-5 transition-all cursor-pointer hover:bg-white/5 hover:shadow-md ${
+                selectedId === session.id ? "ring-2 ring-ring/40" : ""
+              }`}
+              onClick={() =>
+                selectedId === session.id
+                  ? setSelectedId(null)
+                  : openDoctor(session)
+              }
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2 mb-1.5">
                     <span className="text-sm font-medium text-foreground">
-                      {formatDate(session.date)}
+                      {formatDate(session.created_at)}
                     </span>
-                    <span className="text-xs text-muted-foreground bg-white/5 rounded-full px-2 py-0.5">
-                      {session.duration}
+                    <span className="text-[11px] text-muted-foreground bg-white/5 rounded-full px-2 py-0.5">
+                      {session.message_count} messages
                     </span>
+                    {session.is_crisis && (
+                      <span className="flex items-center gap-1 text-[11px] text-destructive">
+                        <AlertTriangle className="size-3" /> Crisis session
+                      </span>
+                    )}
                   </div>
                   <p className="text-sm text-muted-foreground/80 line-clamp-2">
-                    {session.preview}
+                    {session.preview || "(no transcript preview available)"}
                   </p>
                 </div>
-
                 <div className="flex flex-col items-end gap-1 shrink-0">
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs text-muted-foreground/60">Mood:</span>
-                    <span className="text-xs text-amber-400/80">{moodLabel(session.moodBefore)} → {moodLabel(session.moodAfter)}</span>
+                  <div className="flex items-center gap-1.5">
+                    <Clock className="size-3 text-muted-foreground/60" />
+                    <span className="text-xs text-muted-foreground">
+                      {session.state}
+                    </span>
                   </div>
-                  <div className="flex gap-1">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedSession(null);
-                        setDoctorPrepOpen(true);
-                      }}
-                      className="glass-soft rounded-full px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                      title={t("history.export")}
-                    >
-                      {t("history.export")}
-                    </button>
-                  </div>
+                  <span className="text-[11px] text-muted-foreground/50">
+                    {session.closure_reason?.replace(/_/g, " ") || "—"}
+                  </span>
                 </div>
               </div>
-            </div>
+            </motion.div>
           ))}
         </div>
       )}
 
-      {/* Doctor prep modal */}
-      {doctorPrepOpen && selectedSession && (
+      {/* Doctor summary modal */}
+      {doctorOpen && doctorSummary && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => setDoctorPrepOpen(false)}
+            onClick={() => setDoctorOpen(false)}
           />
-          <div className="relative glass rounded-3xl p-6 sm:p-8 max-w-lg w-full max-h-[80vh] overflow-y-auto animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="relative glass rounded-3xl p-6 sm:p-8 max-w-lg w-full max-h-[85vh] overflow-y-auto animate-in fade-in slide-in-from-bottom-4 duration-300">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold">{t("history.doctorPrepTitle")}</h2>
               <button
-                onClick={() => setDoctorPrepOpen(false)}
+                onClick={() => setDoctorOpen(false)}
                 className="glass-soft rounded-full w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
               >
                 ✕
@@ -210,25 +270,21 @@ starter with your healthcare provider.
               {t("history.doctorPrepSubtitle")}
             </p>
 
-            <div className="glass rounded-2xl p-4 mb-6 text-left text-sm text-foreground/80 whitespace-pre-wrap font-mono">
-              {generateDoctorPrep(selectedSession)}
+            <div className="glass rounded-2xl p-4 mb-6 text-left text-sm text-foreground/80 whitespace-pre-wrap font-mono leading-relaxed">
+              {doctorSummary.full_text}
             </div>
 
             <div className="flex gap-3">
               <button
-                onClick={() => copyToClipboard(generateDoctorPrep(selectedSession))}
+                onClick={copySummary}
                 className={`flex-1 glass-soft rounded-full px-5 py-3 text-sm font-medium transition-all ${
-                  copied ? "bg-green-500/20 text-green-400" : "hover:bg-white/10"
+                  copyCopied ? "bg-green-500/20 text-green-400" : "hover:bg-white/10"
                 }`}
               >
-                {copied ? "Copied!" : t("history.copy")}
+                {copyCopied ? "Copied!" : t("history.copy")}
               </button>
               <button
-                onClick={() => {
-                  const text = generateDoctorPrep(selectedSession);
-                  downloadAsText(text, `glow-summary-${selectedSession.date}.txt`);
-                  setDoctorPrepOpen(false);
-                }}
+                onClick={downloadSummary}
                 className="flex-1 glass-soft rounded-full px-5 py-3 text-sm font-medium hover:bg-white/10 transition-all"
               >
                 {t("history.download")}
@@ -238,7 +294,7 @@ starter with your healthcare provider.
         </div>
       )}
 
-      {/* Empty state hint */}
+      {/* Empty hint */}
       {sessions.length === 0 && (
         <p className="text-center text-sm text-muted-foreground mt-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
           {t("history.empty")}

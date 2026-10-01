@@ -77,14 +77,22 @@ class DoctorPrepResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _get_session_record(db: AsyncSession, session_id: str, user_account_id: int):
+async def _get_session_record(db: AsyncSession, session_id: str, user_id: str):
     """Fetch a session record belonging to the given user."""
-    from glow_api.models import SessionRecordModel
+    from glow_api.models import SessionRecordModel, UserAccountModel
+
+    uid_row = await db.execute(
+        select(UserAccountModel.id).where(UserAccountModel.user_id == user_id)
+    )
+    db_user_id = uid_row.scalar_one_or_none()
+    if db_user_id is None:
+        return None
+
     stmt = select(SessionRecordModel).where(
         SessionRecordModel.session_id == session_id,
-        SessionRecordModel.user_account_id == user_account_id,
+        SessionRecordModel.user_account_id == db_user_id,
     )
-    result = db.execute(stmt)
+    result = await db.execute(stmt)
     return result.scalar_one_or_none()
 
 
@@ -175,7 +183,7 @@ async def record_mood(
     db: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> MoodResponse:
     """Record a pre- or post-session mood rating (1-5)."""
-    session = _get_session_record(db, session_id, user.internal_id)
+    session = await _get_session_record(db, session_id, user.user_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -205,8 +213,18 @@ async def get_session_history(
     """Return the user's session history, most recent first."""
     from glow_api.models import SessionRecordModel
 
+    # Look up the user's integer DB id from the users table
+    from glow_api.models import UserAccountModel
+
+    uid_row = await db.execute(
+        select(UserAccountModel.id).where(UserAccountModel.user_id == user.user_id)
+    )
+    db_user_id = uid_row.scalar_one_or_none()
+    if db_user_id is None:
+        return SessionHistoryResponse(sessions=[], total=0)
+
     stmt = select(SessionRecordModel).where(
-        SessionRecordModel.user_account_id == user.internal_id
+        SessionRecordModel.user_account_id == db_user_id
     ).order_by(SessionRecordModel.started_at.desc())
     result = db.execute(stmt)
     sessions = result.scalars().all()
@@ -299,7 +317,7 @@ async def generate_doctor_prep(
     db: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> DoctorPrepResponse:
     """Generate a doctor-ready plain text summary for a session."""
-    session = _get_session_record(db, session_id, user.internal_id)
+    session = await _get_session_record(db, session_id, user.user_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 

@@ -1,13 +1,16 @@
-"""
-Database session management and Base models.
+"""Database session management and Base models — SQLite-optimized.
 
 This module provides the SQLAlchemy 2.0 async engine and session factory
 configuration, plus the `Base` declarative class for ORM models.
 
-Provider: PostgreSQL (via asyncpg and SQLAlchemy[asyncio]).
+SQLite tuning for concurrent async access:
+- WAL journal mode for concurrent readers + single writer.
+- SHORT_TIMEOUT connect_args so aiosqlite doesn't block the event loop
+  waiting on a locked database.
+- Connection pool tuned for low-concurrency async workloads.
 """
 
-
+from __future__ import annotations
 
 import contextlib
 from collections.abc import AsyncIterator
@@ -29,8 +32,6 @@ from glow_api.settings import settings
 # SQLAlchemy Declarative Base
 # ---------------------------------------------------------------------------
 
-
-# Naming convention for predictable constraint names in Alembic migrations.
 POSTGRES_INDEXES_NAMING_CONVENTION = {
     "ix": "ix_%(column_0_label)s",
     "uq": "uq_%(table_name)s_%(column_0_name)s",
@@ -51,14 +52,27 @@ class Base(DeclarativeBase):
 # Engine and Session
 # ---------------------------------------------------------------------------
 
+# How long (seconds) aiosqlite will wait for a locked database before
+# raising OperationalError.  Keep this short so we never block the async
+# event loop — a lock contention is better handled by retrying than by
+# freezing the server.
+_SQLITE_TIMEOUT = 5
+
+# Extra connect args passed to aiosqlite for every new connection.
+_SQLITE_CONNECT_ARGS = {
+    "timeout": _SQLITE_TIMEOUT,
+    # WAL mode lets concurrent readers proceed while a single writer holds
+    # the lock.  Enable it once at startup (see _ensure_sqlite_wal below).
+    "check_same_thread": False,
+}
+
 
 class DatabaseManager:
     """Manages the database engine and session factory lifecycle.
 
-    Because Glow uses an unconfigured DB in Phase 0/1 testing, this class
-    tolerates a missing GLOW_DATABASE_URL by deferring engine creation.
-    Routes that attempt to get a DB session will fail loudly with
-    ProviderNotConfiguredError.
+    Because Glow uses SQLite in local development, this class special-cases
+    the SQLite driver to enable WAL mode and short lock timeouts so that
+    concurrent async sessions don't deadlock.
     """
 
     def __init__(self) -> None:
@@ -68,20 +82,29 @@ class DatabaseManager:
     def initialize(self) -> None:
         """Initialize the database engine if a URL is configured."""
         if not settings.database_url:
-            return  # Will fail on first session access
+            return
 
-        # Translate `postgres://` to `postgresql+asyncpg://` if needed
         db_url = settings.database_url
         if db_url.startswith("postgres://"):
             db_url = db_url.replace("postgres://", "postgresql+asyncpg://", 1)
         elif db_url.startswith("postgresql://"):
             db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
+        # SQLite-specific tuning
+        connect_args: dict[str, Any] = {}
+        if db_url.startswith("sqlite"):
+            connect_args.update(_SQLITE_CONNECT_ARGS)
+
         self._engine = create_async_engine(
             db_url,
             echo=settings.environment == "development",
             future=True,
             pool_pre_ping=True,
+            # Small pool for SQLite — it serializes writes anyway.
+            pool_size=5,
+            max_overflow=10,
+            pool_timeout=30,
+            pool_recycle=3600,
         )
         self._session_factory = async_sessionmaker(
             bind=self._engine,
@@ -89,6 +112,29 @@ class DatabaseManager:
             expire_on_commit=False,
             autoflush=False,
         )
+
+        # Enable WAL mode on SQLite so concurrent access doesn't deadlock.
+        if db_url.startswith("sqlite"):
+            self._ensure_sqlite_wal()
+
+    async def _ensure_sqlite_wal(self) -> None:
+        """Enable WAL journal mode so concurrent reads don't block writes."""
+        if self._engine is None:
+            return
+        try:
+            async with self._engine.begin() as conn:
+                await conn.execute(
+                    __import__("sqlalchemy").text("PRAGMA journal_mode=WAL")
+                )
+                await conn.execute(
+                    __import__("sqlalchemy").text(f"PRAGMA busy_timeout={_SQLITE_TIMEOUT * 1000}")
+                )
+        except Exception as exc:
+            # Non-fatal: the server still works without WAL, just slower.
+            import logging
+            logging.getLogger("glow_api.database").warning(
+                "Failed to enable SQLite WAL mode: %s", exc
+            )
 
     async def close(self) -> None:
         """Close the database engine."""
