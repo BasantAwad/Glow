@@ -23,7 +23,7 @@ Supported locales (pilot, Egypt-only, adults 18+ — ADR 0001):
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Annotated
@@ -55,10 +55,12 @@ class SessionMode(StrEnum):
 
     open_conversation — User-led; no structured agenda.
     guided_questions  — Facilitator-style; Glow asks reflective questions.
+    listen_only       — Reflective-only; Glow listens and mirrors without unsolicited advice.
     """
 
     OPEN_CONVERSATION = "open_conversation"
     GUIDED_QUESTIONS = "guided_questions"
+    LISTEN_ONLY = "listen_only"
 
 
 class AvatarDisclosurePreference(StrEnum):

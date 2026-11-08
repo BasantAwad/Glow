@@ -14,6 +14,8 @@ import {
   CreditCard,
   LogOut,
   UserRound,
+  Wind,
+  Gamepad2,
 } from "lucide-react";
 import { GlowMark } from "./GlowMark";
 import { useLanguage, LANGUAGE_LABELS } from "../contexts/LanguageContext";
@@ -30,10 +32,10 @@ export function TopNav() {
   const links = [
     { to: "/", label: t("nav.talk"), icon: Home },
     { to: "/chat", label: t("nav.chat"), icon: MessageCircle },
-    { to: "/talk", label: t("nav.voice"), icon: AudioLines },
     { to: "/presence", label: t("nav.avatar"), icon: Sparkles },
+    { to: "/practices", label: "Practices", icon: Wind },
+    { to: "/games", label: "Games", icon: Gamepad2 },
     { to: "/wellness", label: t("nav.wellness"), icon: BookHeart },
-    { to: "/reflections", label: t("nav.reflections"), icon: Moon },
     { to: "/billing", label: t("nav.billing"), icon: CreditCard },
   ];
 

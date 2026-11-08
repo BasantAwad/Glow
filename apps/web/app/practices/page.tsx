@@ -1,605 +1,766 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useLanguage } from "../../contexts/LanguageContext";
-import { Play, Pause, RotateCcw, SkipForward, Check } from "lucide-react";
+import { Play, Pause, RotateCcw, SkipForward, Check, Wind, Heart, Sparkles, Volume2, ArrowLeft } from "lucide-react";
 
-type Mode = "rain" | "white-noise" | "forest";
+type SoundMode = "rain" | "white-noise" | "forest" | "waves";
+type ExerciseType =
+  | "belly-breathing"
+  | "box-breathing"
+  | "4-7-8"
+  | "extended-exhale"
+  | "grounding-54321"
+  | "body-scan"
+  | "soundscape";
 
-type ExerciseType = "box-breathing" | "body-scan" | "journaling" | "soundscape";
 type ExerciseState = "idle" | "running" | "paused" | "done";
 
 interface Exercise {
   id: ExerciseType;
-  titleKey: string;
-  descKey: string;
+  title: string;
+  duration: string;
+  desc: string;
+  bestFor: string;
   icon: string;
   color: string;
 }
 
-const exercises: Exercise[] = [
+const EXERCISES: Exercise[] = [
+  {
+    id: "belly-breathing",
+    title: "Easy Belly Breathing",
+    duration: "2 min",
+    desc: "A gentle expanding and contracting circle to slow your autonomic nervous system.",
+    bestFor: "First-time users & general everyday stress",
+    icon: "🌊",
+    color: "from-sky-500/20 to-teal-500/10",
+  },
   {
     id: "box-breathing",
-    titleKey: "practice.boxBreathing",
-    descKey: "practice.boxBreathingDesc",
-    icon: "🌬️",
+    title: "Box Breathing",
+    duration: "3 min",
+    desc: "Equal 4-count rhythm (inhale, hold, exhale, hold) used by athletes and responders.",
+    bestFor: "Focus, acute overwhelm & pre-sleep racing thoughts",
+    icon: "⏹️",
     color: "from-cyan-500/20 to-blue-500/10",
   },
   {
+    id: "4-7-8",
+    title: "4-7-8 Calming Sequence",
+    duration: "2 min",
+    desc: "A deep 4-count inhale, tranquil 7-count pause, and long 8-count audible release.",
+    bestFor: "Winding down, deep insomnia & physical panic",
+    icon: "🌙",
+    color: "from-indigo-500/20 to-purple-500/10",
+  },
+  {
+    id: "extended-exhale",
+    title: "Extended Exhale",
+    duration: "2 min",
+    desc: "Inhale for 4, exhale for 6, easing into 4-8. Stimulates the vagal calming reflex.",
+    bestFor: "Physical anxiety, chest tightness & racing heart",
+    icon: "🌬️",
+    color: "from-amber-500/20 to-orange-500/10",
+  },
+  {
+    id: "grounding-54321",
+    title: "5-4-3-2-1 Sensory Grounding",
+    duration: "4 min",
+    desc: "Combines slow deep breaths with noticing 5 sights, 4 sensations, 3 sounds, 2 scents, 1 taste.",
+    bestFor: "Dissociation, panic & spiraling thoughts",
+    icon: "🌿",
+    color: "from-emerald-500/20 to-green-500/10",
+  },
+  {
     id: "body-scan",
-    titleKey: "practice.bodyScan",
-    descKey: "practice.bodyScanDesc",
+    title: "Gentle Body Scan",
+    duration: "3 min",
+    desc: "Travel mindfully from toes to crown, releasing tension held silently in muscles.",
+    bestFor: "Physical tension, end-of-day decompression",
     icon: "🧘",
     color: "from-purple-500/20 to-pink-500/10",
   },
   {
-    id: "journaling",
-    titleKey: "practice.journaling",
-    descKey: "practice.journalingDesc",
-    icon: "✍️",
-    color: "from-amber-500/20 to-orange-500/10",
-  },
-  {
     id: "soundscape",
-    titleKey: "practice.soundscape",
-    descKey: "practice.soundscapeDesc",
+    title: "Nature Soundscapes",
+    duration: "Open",
+    desc: "Immersive synthesized nature audio (rain, ocean waves, white noise, mountain wind).",
+    bestFor: "Background comfort while resting or working",
     icon: "🎵",
-    color: "from-emerald-500/20 to-teal-500/10",
+    color: "from-teal-500/20 to-emerald-500/10",
   },
 ];
 
-function BoxBreathingExercise({ t }: { t: (key: string) => string }) {
-  const [step, setStep] = useState(0);
+/* ---------------------------------------------------------------------------
+ * 1. Universal Paced Breathing Component
+ * --------------------------------------------------------------------------- */
+
+interface PacedBreathingProps {
+  title: string;
+  phases: { name: string; durationSec: number; visual: "inhale" | "hold" | "exhale"; color: string }[];
+  totalCycles: number;
+  bestFor: string;
+}
+
+function PacedBreathing({ title, phases, totalCycles, bestFor }: PacedBreathingProps) {
+  const [phaseIndex, setPhaseIndex] = useState(0);
+  const [cycle, setCycle] = useState(1);
   const [state, setState] = useState<ExerciseState>("idle");
-  const [cycles, setCycles] = useState(0);
-  const [currentCycle, setCurrentCycle] = useState(1);
+  const [countdown, setCountdown] = useState(phases[0].durationSec);
 
-  const totalSteps = 4; // inhale, hold, exhale, hold
-  const totalCycles = 4;
-
-  const stepNames = [
-    () => t("practice.breatheIn"),
-    () => t("practice.breatheHold"),
-    () => t("practice.breatheOut"),
-    () => t("practice.breatheHold"),
-  ];
-
-  const stepDurations = [4, 4, 4, 4]; // seconds
+  const currentPhase = phases[phaseIndex];
 
   useEffect(() => {
     if (state !== "running") return;
 
-    const duration = stepDurations[step] * 1000;
-    const timer = setTimeout(() => {
-      if (step < totalSteps - 1) {
-        setStep(step + 1);
-      } else {
-        // Completed one cycle
-        if (currentCycle >= totalCycles) {
-          setState("done");
-        } else {
-          setCurrentCycle(currentCycle + 1);
-          setStep(0);
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          // Advance phase
+          if (phaseIndex + 1 < phases.length) {
+            setPhaseIndex((p) => p + 1);
+            return phases[phaseIndex + 1].durationSec;
+          } else {
+            // End of cycle
+            if (cycle >= totalCycles) {
+              setState("done");
+              return 0;
+            } else {
+              setCycle((c) => c + 1);
+              setPhaseIndex(0);
+              return phases[0].durationSec;
+            }
+          }
         }
-      }
-    }, duration);
+        return prev - 1;
+      });
+    }, 1000);
 
-    return () => clearTimeout(timer);
-  }, [step, state, currentCycle]);
+    return () => clearInterval(timer);
+  }, [state, phaseIndex, cycle, phases, totalCycles]);
 
-  const start = () => {
-    setStep(0);
-    setCurrentCycle(1);
+  const handleStart = () => {
+    setCycle(1);
+    setPhaseIndex(0);
+    setCountdown(phases[0].durationSec);
     setState("running");
   };
 
-  const pause = () => setState("paused");
-  const resume = () => setState("running");
-  const reset = () => {
-    setStep(0);
-    setCurrentCycle(1);
+  const handleReset = () => {
     setState("idle");
+    setCycle(1);
+    setPhaseIndex(0);
+    setCountdown(phases[0].durationSec);
   };
-
-  const skip = () => {
-    setStep(0);
-    setCurrentCycle(1);
-    setState("done");
-  };
-
-  const progress = ((currentCycle - 1) / totalCycles) * 100 + (step / totalSteps) * (100 / totalCycles);
 
   if (state === "done") {
     return (
-      <div className="glass rounded-3xl p-8 text-center animate-in fade-in slide-in-from-bottom-4 duration-500 h-full flex flex-col items-center justify-center">
-        <div className="aurora w-16 h-16 rounded-full flex items-center justify-center mb-4">
-          <Check className="size-8 text-primary-foreground" />
+      <div className="glass rounded-3xl p-8 text-center h-full flex flex-col items-center justify-center animate-in fade-in duration-500">
+        <div className="aurora size-20 rounded-full flex items-center justify-center mb-6">
+          <Check className="size-10 text-primary-foreground" />
         </div>
-        <h3 className="text-xl font-semibold mb-2">{t("practice.done")}</h3>
-        <p className="text-sm text-muted-foreground mb-6">
-          {currentCycle} cycles completed. Notice how your body feels.
+        <h3 className="font-display text-2xl font-semibold mb-2">Practice complete</h3>
+        <p className="text-muted-foreground text-sm max-w-sm mb-6">
+          You completed all {totalCycles} cycles of {title}. Notice the shift in your chest, shoulders, and breath.
         </p>
-        <div className="flex gap-3">
-          <button onClick={reset} className="glass-soft rounded-full px-6 py-3 text-sm font-medium hover:bg-white/10 transition-colors">
-            <RotateCcw className="size-4 inline mr-2" />
-            {t("practice.repeat")}
-          </button>
-          <button onClick={() => window.location.reload()} className="glass-soft rounded-full px-6 py-3 text-sm font-medium hover:bg-white/10 transition-colors">
-            Done
-          </button>
-        </div>
+        <button
+          onClick={handleReset}
+          className="aurora halo rounded-full px-6 py-3 text-sm font-medium text-primary-foreground transition-transform hover:scale-105"
+        >
+          <RotateCcw className="size-4 inline mr-2" />
+          Do another round
+        </button>
       </div>
     );
   }
 
+  const progressPercent = ((cycle - 1) * phases.length + phaseIndex) / (totalCycles * phases.length) * 100;
+
+  // Scale of visual circle
+  const circleScale =
+    currentPhase.visual === "inhale"
+      ? "scale-125 transition-transform duration-[4000ms] ease-out"
+      : currentPhase.visual === "exhale"
+      ? "scale-75 transition-transform duration-[6000ms] ease-in"
+      : "scale-110 transition-transform duration-700 ease-in-out";
+
   return (
-    <div className={`glass rounded-3xl p-6 sm:p-8 text-center h-full flex flex-col ${state === "running" ? "animate-in fade-in slide-in-from-bottom-4 duration-500" : ""}`}>
-      {/* Progress bar */}
-      <div className="w-full bg-white/5 rounded-full h-1.5 mb-6 overflow-hidden">
-        <div
-          className="h-full rounded-full aurora transition-all duration-300"
-          style={{ width: `${progress}%` }}
-        />
-      </div>
-
-      {/* Step indicator */}
-      <div className="text-sm text-muted-foreground mb-2">
-        {t("practice.step").replace("{n}", String(currentCycle)).replace("{total}", String(totalCycles))}
-      </div>
-
-      {/* Main step content */}
-      <div className="flex-1 flex flex-col items-center justify-center">
-        <div className={`text-3xl sm:text-4xl font-display font-semibold mb-4 transition-all duration-300 ${
-          step === 0 ? "text-cyan-400" : step === 1 ? "text-purple-400" : step === 2 ? "text-amber-400" : "text-purple-400"
-        }`}>
-          {stepNames[step]()}
+    <div className="glass rounded-3xl p-6 sm:p-8 text-center h-full flex flex-col justify-between">
+      {/* Top bar */}
+      <div>
+        <div className="w-full bg-white/5 rounded-full h-1.5 mb-4 overflow-hidden">
+          <div className="h-full aurora transition-all duration-500" style={{ width: `${progressPercent}%` }} />
         </div>
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>Cycle {cycle} of {totalCycles}</span>
+          <span className="opacity-70">{bestFor}</span>
+        </div>
+      </div>
 
-        {/* Visual circle that pulses with breathing */}
-        <div className="relative mb-6">
-          <div className={`w-32 h-32 sm:w-40 sm:h-40 rounded-full flex items-center justify-center transition-all duration-1000 ${
-            step === 0 ? "bg-cyan-400/20 scale-110" : step === 1 ? "bg-purple-400/20 scale-105" : step === 2 ? "bg-amber-400/20 scale-95" : "bg-purple-400/20 scale-105"
-          }`}>
-            <div className="text-4xl sm:text-5xl">{step === 0 ? "🌬️" : step === 1 ? "⏸️" : step === 2 ? "💨" : "⏸️"}</div>
+      {/* Main visual display */}
+      <div className="flex-1 flex flex-col items-center justify-center my-6">
+        <div className="relative flex items-center justify-center">
+          {/* Animated pulsing outer halo */}
+          <div
+            className={`absolute rounded-full border border-primary/20 size-48 sm:size-60 transition-all ${
+              state === "running" ? "animate-ping opacity-20" : "opacity-0"
+            }`}
+            style={{ animationDuration: "3s" }}
+          />
+
+          {/* Central breathing circle */}
+          <div
+            className={`aurora halo size-36 sm:size-48 rounded-full flex flex-col items-center justify-center text-primary-foreground shadow-2xl ${circleScale}`}
+          >
+            <span className="text-3xl sm:text-4xl font-display font-semibold">{countdown}</span>
+            <span className="text-xs uppercase tracking-widest mt-1 opacity-90">{currentPhase.name}</span>
           </div>
-          {/* Decorative rings */}
-          <div className="absolute inset-0 rounded-full border border-white/5 animate-pulse" style={{ animationDuration: "4s" }} />
         </div>
 
-        <div className="text-xs text-muted-foreground mb-6">
-          Cycle {currentCycle} of {totalCycles}
-        </div>
+        <h3 className="font-display text-2xl font-semibold mt-8 mb-1">{currentPhase.name}</h3>
+        <p className="text-sm text-muted-foreground/80 max-w-xs">
+          {currentPhase.visual === "inhale"
+            ? "Expand gently into your belly and ribs without forcing."
+            : currentPhase.visual === "hold"
+            ? "Rest gently at the top. Keep your jaw and shoulders soft."
+            : "Let the breath pour out like warm water. Soften completely."}
+        </p>
       </div>
 
       {/* Controls */}
-      <div className="flex items-center justify-center gap-3 mt-4">
+      <div className="flex items-center justify-center gap-3">
         {state === "idle" && (
-          <button onClick={start} className="aurora flex items-center gap-2 rounded-full px-6 py-3 text-sm font-medium shadow-lg hover:scale-[1.02] transition-transform">
+          <button
+            onClick={handleStart}
+            className="aurora halo flex items-center gap-2 rounded-full px-8 py-3.5 text-sm font-medium text-primary-foreground transition-transform hover:scale-105"
+          >
             <Play className="size-4" />
-            {t("practice.start")}
+            Begin practice
           </button>
         )}
         {state === "running" && (
-          <button onClick={pause} className="glass-soft flex items-center gap-2 rounded-full px-5 py-3 text-sm hover:bg-white/10 transition-colors">
+          <button
+            onClick={() => setState("paused")}
+            className="glass-soft flex items-center gap-2 rounded-full px-6 py-3 text-sm transition-colors hover:text-foreground"
+          >
             <Pause className="size-4" />
-            {t("practice.pause")}
+            Pause
           </button>
         )}
         {state === "paused" && (
-          <button onClick={resume} className="glass-soft flex items-center gap-2 rounded-full px-5 py-3 text-sm hover:bg-white/10 transition-colors">
+          <button
+            onClick={() => setState("running")}
+            className="aurora flex items-center gap-2 rounded-full px-6 py-3 text-sm font-medium text-primary-foreground transition-transform hover:scale-105"
+          >
             <Play className="size-4" />
-            {t("practice.resume")}
+            Resume
           </button>
         )}
-        <button onClick={reset} className="glass-soft flex items-center gap-2 rounded-full px-4 py-3 text-sm text-muted-foreground hover:text-foreground transition-colors">
-          <RotateCcw className="size-4" />
-        </button>
-        <button onClick={skip} className="glass-soft flex items-center gap-2 rounded-full px-4 py-3 text-sm text-muted-foreground hover:text-foreground transition-colors">
-          <SkipForward className="size-4" />
-          {t("practice.skip")}
-        </button>
+        {state !== "idle" && (
+          <button
+            onClick={handleReset}
+            className="glass-soft flex items-center gap-2 rounded-full px-4 py-3 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <RotateCcw className="size-4" />
+          </button>
+        )}
+        {state === "running" && (
+          <button
+            onClick={() => setState("done")}
+            className="glass-soft flex items-center gap-2 rounded-full px-4 py-3 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <SkipForward className="size-4" />
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
-function BodyScanExercise({ t }: { t: (key: string) => string }) {
-  const [step, setStep] = useState<number>(0);
-  const [state, setState] = useState<ExerciseState>("idle");
+/* ---------------------------------------------------------------------------
+ * 2. 5-4-3-2-1 Grounding Sensory Exercise
+ * --------------------------------------------------------------------------- */
 
-  const bodyParts = [
-    { name: "Feet", desc: "Notice your toes, heels, the soles of your feet." },
-    { name: "Legs", desc: "Move your attention up to your calves and knees." },
-    { name: "Hips", desc: "Notice any tension in your hips and pelvis." },
-    { name: "Belly", desc: "Feel your stomach rise and fall with each breath." },
-    { name: "Chest", desc: "Notice your chest expanding and contracting." },
-    { name: "Hands", desc: "Feel your fingers, palms, and wrists." },
-    { name: "Shoulders", desc: "Are your shoulders tense? Let them drop slightly." },
-    { name: "Face", desc: "Notice your jaw, eyes, forehead. Soften them." },
-    { name: "Whole body", desc: "Feel your entire body as one. Breathe into it." },
+function Grounding54321() {
+  const steps = [
+    { count: 5, prompt: "Acknowledge 5 things you can SEE around you", hint: "A shadow, a texture, a color, light on a wall, an everyday object", icon: "👀" },
+    { count: 4, prompt: "Acknowledge 4 things you can physically FEEL", hint: "Feet on the floor, clothing against skin, warmth of your hands, texture of chair", icon: "✋" },
+    { count: 3, prompt: "Acknowledge 3 distinct things you can HEAR", hint: "A fan hum, distant cars, your own steady breath, wind outside", icon: "👂" },
+    { count: 2, prompt: "Acknowledge 2 things you can SMELL right now", hint: "Clean air, soap, coffee, clothing, or take in a deep neutral breath", icon: "👃" },
+    { count: 1, prompt: "Acknowledge 1 thing you can TASTE or one KIND word", hint: "A lingering flavor, water, or whisper to yourself: 'I am safe right now'", icon: "🤍" },
   ];
 
-  useEffect(() => {
-    if (state !== "running") return;
-    const timer = setTimeout(() => {
-      if (step < bodyParts.length - 1) {
-        setStep(step + 1);
-      } else {
-        setState("done");
-      }
-    }, 8000); // 8 seconds per body part
-    return () => clearTimeout(timer);
-  }, [step, state]);
+  const [stepIdx, setStepIdx] = useState(0);
+  const [completed, setCompleted] = useState<number[]>([]);
+  const [done, setDone] = useState(false);
 
-  if (state === "done") {
+  const current = steps[stepIdx];
+
+  const advance = () => {
+    setCompleted((prev) => [...prev, stepIdx]);
+    if (stepIdx + 1 < steps.length) {
+      setStepIdx((i) => i + 1);
+    } else {
+      setDone(true);
+    }
+  };
+
+  const reset = () => {
+    setStepIdx(0);
+    setCompleted([]);
+    setDone(false);
+  };
+
+  if (done) {
     return (
-      <div className="glass rounded-3xl p-8 text-center animate-in fade-in slide-in-from-bottom-4 duration-500 h-full flex flex-col items-center justify-center">
-        <div className="aurora w-16 h-16 rounded-full flex items-center justify-center mb-4">
-          <Check className="size-8 text-primary-foreground" />
+      <div className="glass rounded-3xl p-8 text-center h-full flex flex-col items-center justify-center animate-in fade-in duration-500">
+        <div className="aurora size-20 rounded-full flex items-center justify-center mb-6">
+          <Check className="size-10 text-primary-foreground" />
         </div>
-        <h3 className="text-xl font-semibold mb-2">{t("practice.done")}</h3>
-        <p className="text-sm text-muted-foreground mb-6">
-          You scanned your whole body. Notice any areas that feel different now.
+        <h3 className="font-display text-2xl font-semibold mb-2">You are anchored here</h3>
+        <p className="text-muted-foreground text-sm max-w-sm mb-6">
+          Your mind has returned to the physical room. Take one easy breath into your lower belly. You are here and you are safe.
         </p>
-        <button onClick={() => window.location.reload()} className="glass-soft rounded-full px-6 py-3 text-sm font-medium hover:bg-white/10 transition-colors">
-          Done
+        <button
+          onClick={reset}
+          className="aurora halo rounded-full px-6 py-3 text-sm font-medium text-primary-foreground"
+        >
+          <RotateCcw className="size-4 inline mr-2" />
+          Practice again
         </button>
       </div>
     );
   }
 
-  const bodyPart = bodyParts[step];
-
   return (
-    <div className="glass rounded-3xl p-6 sm:p-8 text-center h-full flex flex-col">
-      {/* Progress */}
-      <div className="flex justify-center gap-1.5 mb-4">
-        {bodyParts.map((_, i) => (
+    <div className="glass rounded-3xl p-6 sm:p-8 text-center h-full flex flex-col justify-between">
+      {/* Step dots */}
+      <div className="flex justify-center gap-2 mb-4">
+        {steps.map((s, idx) => (
           <div
-            key={i}
-            className={`w-2 h-2 rounded-full transition-all ${
-              i < step ? "bg-primary/60" : i === step ? "bg-primary animate-pulse" : "bg-white/10"
+            key={s.count}
+            className={`size-2.5 rounded-full transition-all ${
+              completed.includes(idx)
+                ? "bg-primary"
+                : idx === stepIdx
+                ? "bg-primary animate-pulse scale-125"
+                : "bg-white/10"
             }`}
           />
         ))}
       </div>
 
-      <div className="text-sm text-muted-foreground mb-1">
-        Step {step + 1} of {bodyParts.length}
+      {/* Main card */}
+      <div className="flex-1 flex flex-col items-center justify-center my-4">
+        <span className="text-5xl mb-4">{current.icon}</span>
+        <span className="aurora px-3 py-1 rounded-full text-xs font-semibold text-primary-foreground mb-3">
+          Step {stepIdx + 1} of 5
+        </span>
+        <h3 className="font-display text-2xl sm:text-3xl font-semibold max-w-md mb-3 leading-snug">
+          {current.prompt}
+        </h3>
+        <p className="text-sm text-muted-foreground max-w-sm leading-relaxed mb-6">
+          {current.hint}
+        </p>
+        <div className="glass-soft rounded-2xl px-5 py-3 text-xs text-muted-foreground/80 max-w-xs">
+          Take your time. Look around the room slowly before tapping continue.
+        </div>
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center">
-        <div className="text-2xl sm:text-3xl font-display font-semibold text-foreground mb-3">
-          {bodyPart.name}
-        </div>
-        <div className="text-sm text-muted-foreground/80 max-w-md">
-          {bodyPart.desc}
-        </div>
-        <div className="mt-4 text-xs text-muted-foreground">
-          Notice any sensations — tension, warmth, numbness, nothing at all. Whatever you notice is okay.
-        </div>
-      </div>
-
-      <div className="flex items-center justify-center gap-3 mt-4">
-        {state === "idle" && (
-          <button onClick={() => setState("running")} className="aurora flex items-center gap-2 rounded-full px-6 py-3 text-sm font-medium shadow-lg hover:scale-[1.02] transition-transform">
-            <Play className="size-4" />
-            {t("practice.start")}
-          </button>
-        )}
-        {state === "running" && (
-          <button onClick={() => setState("paused")} className="glass-soft flex items-center gap-2 rounded-full px-5 py-3 text-sm hover:bg-white/10 transition-colors">
-            <Pause className="size-4" />
-            {t("practice.pause")}
-          </button>
-        )}
-        {state === "paused" && (
-          <button onClick={() => setState("running")} className="glass-soft flex items-center gap-2 rounded-full px-5 py-3 text-sm hover:bg-white/10 transition-colors">
-            <Play className="size-4" />
-            {t("practice.resume")}
-          </button>
-        )}
-        <button onClick={() => { setStep(0); setState("idle"); }} className="glass-soft flex items-center gap-2 rounded-full px-4 py-3 text-sm text-muted-foreground hover:text-foreground transition-colors">
-          <RotateCcw className="size-4" />
+      {/* Action */}
+      <div className="flex items-center justify-center gap-3">
+        <button
+          onClick={advance}
+          className="aurora halo flex items-center gap-2 rounded-full px-8 py-3.5 text-sm font-medium text-primary-foreground transition-transform hover:scale-105"
+        >
+          <Check className="size-4" />
+          I noticed these, continue
         </button>
-        <button onClick={() => { setStep(0); setState("done"); }} className="glass-soft flex items-center gap-2 rounded-full px-4 py-3 text-sm text-muted-foreground hover:text-foreground transition-colors">
-          <SkipForward className="size-4" />
-          {t("practice.skip")}
-        </button>
+        {stepIdx > 0 && (
+          <button onClick={reset} className="glass-soft rounded-full px-4 py-3 text-xs text-muted-foreground hover:text-foreground">
+            <RotateCcw className="size-4" />
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
-function JournalingExercise({ t }: { t: (key: string) => string }) {
-  const [state, setState] = useState<ExerciseState>("idle");
-  const [currentPrompt, setCurrentPrompt] = useState(0);
-  const [answers, setAnswers] = useState<string[]>([]);
-  const [writing, setWriting] = useState("");
+/* ---------------------------------------------------------------------------
+ * 3. Body Scan Exercise
+ * --------------------------------------------------------------------------- */
 
-  const promptList = [
-    "What's the heaviest thing on your mind right now?",
-    "What's something you wish someone would say to you?",
-    "If you could change one thing about today, what would it be?",
-    "What's a small thing that felt okay today?",
+function BodyScanExercise() {
+  const bodyParts = [
+    { name: "Feet & Soles", desc: "Notice your toes, heels, and the contact with the floor. Release any curled tension." },
+    { name: "Calves & Knees", desc: "Notice your lower legs. Let any heaviness sink down toward the earth." },
+    { name: "Hips & Pelvis", desc: "Allow your seat to sink deeply into your chair or bed. Release holding in your hips." },
+    { name: "Belly & Low Back", desc: "Feel your abdomen gently swell with each inhale. Let your low back soften." },
+    { name: "Chest & Shoulders", desc: "Notice your heart beating. Let your shoulders drop half an inch away from your ears." },
+    { name: "Hands & Wrists", desc: "Uncurl your fingers. Let warmth pool gently in the palms of your hands." },
+    { name: "Jaw, Eyes & Brow", desc: "Unclench your back teeth. Let your tongue rest behind your lower teeth. Smooth your forehead." },
+    { name: "Whole Body Resting", desc: "Breathe into your entire physical vessel as one calm, connected presence." },
   ];
 
-  useEffect(() => {
-    if (state === "running" && currentPrompt < promptList.length) {
-      const timer = setTimeout(() => {
-        setAnswers((prev: string[]) => [...prev, writing]);
-        setWriting("");
-        if (currentPrompt + 1 < promptList.length) {
-          setCurrentPrompt(currentPrompt + 1);
-        } else {
-          setState("done");
-        }
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [currentPrompt, writing, state]);
+  const [step, setStep] = useState(0);
+  const [running, setRunning] = useState(false);
+  const [done, setDone] = useState(false);
 
-  if (state === "done") {
-    const fullText = answers.join("\n\n") + (writing ? "\n\n" + writing : "");
+  useEffect(() => {
+    if (!running || done) return;
+    const timer = setTimeout(() => {
+      if (step + 1 < bodyParts.length) {
+        setStep((s) => s + 1);
+      } else {
+        setDone(true);
+        setRunning(false);
+      }
+    }, 7000);
+    return () => clearTimeout(timer);
+  }, [running, step, done, bodyParts.length]);
+
+  if (done) {
     return (
-      <div className="glass rounded-3xl p-6 sm:p-8 text-center h-full flex flex-col">
-        <div className="aurora w-16 h-16 rounded-full flex items-center justify-center mb-4 mx-auto">
-          <Check className="size-8 text-primary-foreground" />
+      <div className="glass rounded-3xl p-8 text-center h-full flex flex-col items-center justify-center">
+        <div className="aurora size-20 rounded-full flex items-center justify-center mb-6">
+          <Check className="size-10 text-primary-foreground" />
         </div>
-        <h3 className="text-xl font-semibold mb-2">{t("practice.done")}</h3>
-        <p className="text-sm text-muted-foreground mb-4">
-          You wrote {answers.length} reflections. Here's what you shared:
+        <h3 className="font-display text-2xl font-semibold mb-2">Body scan complete</h3>
+        <p className="text-muted-foreground text-sm max-w-sm mb-6">
+          Every muscle group has been offered permission to let go. Notice if your breath feels a little lower in your torso.
         </p>
-        <div className="glass rounded-2xl p-4 mb-6 text-left text-sm text-foreground/80 whitespace-pre-wrap max-w-lg mx-auto">
-          {fullText}
+        <button
+          onClick={() => { setStep(0); setDone(false); setRunning(false); }}
+          className="aurora halo rounded-full px-6 py-3 text-sm font-medium text-primary-foreground"
+        >
+          <RotateCcw className="size-4 inline mr-2" />
+          Repeat scan
+        </button>
+      </div>
+    );
+  }
+
+  const part = bodyParts[step];
+
+  return (
+    <div className="glass rounded-3xl p-6 sm:p-8 text-center h-full flex flex-col justify-between">
+      <div className="flex justify-center gap-1.5 mb-2">
+        {bodyParts.map((_, i) => (
+          <div
+            key={i}
+            className={`size-2 rounded-full transition-all ${
+              i < step ? "bg-primary" : i === step ? "bg-primary animate-pulse scale-125" : "bg-white/10"
+            }`}
+          />
+        ))}
+      </div>
+
+      <div className="flex-1 flex flex-col items-center justify-center my-6">
+        <span className="text-xs text-muted-foreground mb-2">Area {step + 1} of {bodyParts.length}</span>
+        <h3 className="font-display text-3xl font-semibold mb-3 text-foreground">{part.name}</h3>
+        <p className="text-sm text-muted-foreground max-w-sm leading-relaxed mb-6">{part.desc}</p>
+        <div className="aurora size-28 rounded-full flex items-center justify-center text-3xl opacity-80 animate-pulse">
+          🧘
         </div>
-        <div className="flex gap-3 justify-center">
+      </div>
+
+      <div className="flex items-center justify-center gap-3">
+        {!running ? (
           <button
-            onClick={() => navigator.clipboard.writeText(fullText).then(() => alert("Copied!"))}
-            className="glass-soft rounded-full px-5 py-3 text-sm hover:bg-white/10 transition-colors"
+            onClick={() => setRunning(true)}
+            className="aurora halo flex items-center gap-2 rounded-full px-8 py-3.5 text-sm font-medium text-primary-foreground"
           >
-            Copy
+            <Play className="size-4" />
+            Start body scan
           </button>
+        ) : (
           <button
+            onClick={() => setRunning(false)}
+            className="glass-soft flex items-center gap-2 rounded-full px-6 py-3 text-sm"
+          >
+            <Pause className="size-4" />
+            Pause
+          </button>
+        )}
+        <button
+          onClick={() => {
+            if (step + 1 < bodyParts.length) setStep((s) => s + 1);
+            else setDone(true);
+          }}
+          className="glass-soft rounded-full px-4 py-3 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <SkipForward className="size-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+ * 4. Ambient Web Audio Soundscape
+ * --------------------------------------------------------------------------- */
+
+function SoundscapeExercise() {
+  const [playing, setPlaying] = useState(false);
+  const [mode, setMode] = useState<SoundMode>("rain");
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
+
+  const startAudio = useCallback(() => {
+    try {
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const ctx = new AudioCtx();
+      audioCtxRef.current = ctx;
+
+      // Create pink/brown noise node for rain / waves
+      const bufferSize = ctx.sampleRate * 2;
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+
+      let lastOut = 0.0;
+      for (let i = 0; i < bufferSize; i++) {
+        const white = Math.random() * 2 - 1;
+        // Brown noise filter for deep calming sound
+        data[i] = (lastOut + 0.02 * white) / 1.02;
+        lastOut = data[i];
+        data[i] *= 3.5;
+      }
+
+      const noiseNode = ctx.createBufferSource();
+      noiseNode.buffer = buffer;
+      noiseNode.loop = true;
+
+      // Filter depending on mode
+      const filter = ctx.createBiquadFilter();
+      if (mode === "rain") {
+        filter.type = "lowpass";
+        filter.frequency.setValueAtTime(800, ctx.currentTime);
+      } else if (mode === "waves") {
+        filter.type = "bandpass";
+        filter.frequency.setValueAtTime(400, ctx.currentTime);
+      } else if (mode === "forest") {
+        filter.type = "bandpass";
+        filter.frequency.setValueAtTime(1200, ctx.currentTime);
+      } else {
+        filter.type = "lowpass";
+        filter.frequency.setValueAtTime(1500, ctx.currentTime);
+      }
+
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gainNodeRef.current = gain;
+
+      noiseNode.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+
+      noiseNode.start();
+      setPlaying(true);
+    } catch {
+      // AudioContext not allowed without interaction
+    }
+  }, [mode]);
+
+  const stopAudio = useCallback(() => {
+    if (audioCtxRef.current) {
+      audioCtxRef.current.close().catch(() => {});
+      audioCtxRef.current = null;
+    }
+    setPlaying(false);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      stopAudio();
+    };
+  }, [stopAudio]);
+
+  const modes: { id: SoundMode; label: string; icon: string; desc: string }[] = [
+    { id: "rain", label: "Gentle Rain", icon: "🌧️", desc: "Soft steady raindrops pattering outside your window." },
+    { id: "waves", label: "Ocean Tide", icon: "🌊", desc: "Long rhythmic ocean swells breaking upon a smooth sand shore." },
+    { id: "forest", label: "Mountain Pines", icon: "🌲", desc: "Gentle breeze swaying through high branches and whispering needle leaves." },
+    { id: "white-noise", label: "Warm Hum", icon: "🤍", desc: "A smooth neutral static hum that washes away harsh background noises." },
+  ];
+
+  return (
+    <div className="glass rounded-3xl p-6 sm:p-8 text-center h-full flex flex-col justify-between">
+      <div>
+        <h3 className="font-display text-2xl font-semibold mb-1">Ambient Nature Soundscapes</h3>
+        <p className="text-xs text-muted-foreground">Synthesized in real-time in your browser without external tracking</p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 my-4">
+        {modes.map((m) => (
+          <button
+            key={m.id}
             onClick={() => {
-              const blob = new Blob([fullText], { type: "text/plain" });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = `journaling-${new Date().toISOString().slice(0, 10)}.txt`;
-              a.click();
+              setMode(m.id);
+              if (playing) {
+                stopAudio();
+              }
             }}
-            className="glass-soft rounded-full px-5 py-3 text-sm hover:bg-white/10 transition-colors"
+            className={`glass p-4 rounded-2xl text-left transition-all ${
+              mode === m.id ? "border border-primary/40 bg-primary/10 scale-[1.02]" : "hover:bg-white/5 opacity-80"
+            }`}
           >
-            Download
+            <span className="text-2xl block mb-2">{m.icon}</span>
+            <div className="font-medium text-sm text-foreground">{m.label}</div>
+            <div className="text-[11px] text-muted-foreground mt-1 line-clamp-2">{m.desc}</div>
           </button>
-          <button onClick={() => window.location.reload()} className="glass-soft rounded-full px-5 py-3 text-sm hover:bg-white/10 transition-colors">
-            Done
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="glass rounded-3xl p-6 sm:p-8 text-center h-full flex flex-col">
-      <div className="text-sm text-muted-foreground mb-1">
-        Prompt {currentPrompt + 1} of {promptList.length}
+        ))}
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center">
-        <div className="text-base sm:text-lg font-semibold text-foreground mb-6 max-w-md">
-          {promptList[currentPrompt]}
-        </div>
-
-        <textarea
-          value={writing}
-          onChange={(e) => setWriting(e.target.value)}
-          placeholder="Write whatever comes to mind..."
-          className="w-full max-w-lg glass rounded-2xl p-4 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring transition-all"
-          rows={4}
-          disabled={state !== "running"}
-        />
-
-        <div className="mt-2 text-xs text-muted-foreground/50">
-          {writing.length} characters
-        </div>
-      </div>
-
-      <div className="flex items-center justify-center gap-3 mt-4">
-        {state === "idle" && (
-          <button onClick={() => { setCurrentPrompt(0); setAnswers([]); setWriting(""); setState("running"); }} className="aurora flex items-center gap-2 rounded-full px-6 py-3 text-sm font-medium shadow-lg hover:scale-[1.02] transition-transform">
+      <div className="flex items-center justify-center gap-3">
+        {!playing ? (
+          <button
+            onClick={startAudio}
+            className="aurora halo flex items-center gap-2 rounded-full px-8 py-3.5 text-sm font-medium text-primary-foreground transition-transform hover:scale-105"
+          >
             <Play className="size-4" />
-            {t("practice.start")}
+            Play soundscape
           </button>
-        )}
-        {state === "running" && (
-          <button onClick={() => setState("paused")} className="glass-soft flex items-center gap-2 rounded-full px-5 py-3 text-sm hover:bg-white/10 transition-colors">
+        ) : (
+          <button
+            onClick={stopAudio}
+            className="glass-soft flex items-center gap-2 rounded-full px-6 py-3 text-sm text-destructive"
+          >
             <Pause className="size-4" />
-            {t("practice.pause")}
+            Stop audio
           </button>
         )}
-        {state === "paused" && (
-          <button onClick={() => setState("running")} className="glass-soft flex items-center gap-2 rounded-full px-5 py-3 text-sm hover:bg-white/10 transition-colors">
-            <Play className="size-4" />
-            {t("practice.resume")}
-          </button>
-        )}
-        <button onClick={() => { setCurrentPrompt(0); setAnswers([]); setWriting(""); setState("idle"); }} className="glass-soft flex items-center gap-2 rounded-full px-4 py-3 text-sm text-muted-foreground hover:text-foreground transition-colors">
-          <RotateCcw className="size-4" />
-        </button>
       </div>
     </div>
   );
 }
 
-function SoundscapeExercise({ t }: { t: (key: string) => string }) {
-  const [state, setState] = useState<ExerciseState>("idle");
-  const [mode, setMode] = useState<Mode>("rain");
-
-  // Visual representation of soundscape
-  useEffect(() => {
-    if (state === "running") {
-      const handleKey = (e: KeyboardEvent) => {
-        if (e.key === "1") setMode("rain");
-        if (e.key === "2") setMode("white-noise");
-        if (e.key === "3") setMode("forest");
-      };
-      window.addEventListener("keydown", handleKey);
-      return () => window.removeEventListener("keydown", handleKey);
-    }
-  }, [state]);
-
-  if (state === "done") {
-    return (
-      <div className="glass rounded-3xl p-8 text-center animate-in fade-in slide-in-from-bottom-4 duration-500 h-full flex flex-col items-center justify-center">
-        <div className="aurora w-16 h-16 rounded-full flex items-center justify-center mb-4">
-          <Check className="size-8 text-primary-foreground" />
-        </div>
-        <h3 className="text-xl font-semibold mb-2">{t("practice.done")}</h3>
-        <p className="text-sm text-muted-foreground">
-          Take a moment to notice how you feel after this soundscape.
-        </p>
-        <button onClick={() => window.location.reload()} className="glass-soft rounded-full px-6 py-3 text-sm font-medium hover:bg-white/10 transition-colors mt-6">
-          Done
-        </button>
-      </div>
-    );
-  }
-
-  const modeLabels = {
-    rain: "🌧️ Gentle Rain",
-    "white-noise": "🤍 White Noise",
-    forest: "🌲 Forest",
-  };
-
-  return (
-    <div className="glass rounded-3xl p-6 sm:p-8 text-center h-full flex flex-col">
-      <div className="flex-1 flex flex-col items-center justify-center">
-        <div className="text-5xl sm:text-6xl mb-6 animate-pulse">
-          {mode === "rain" ? "🌧️" : mode === "white-noise" ? "🤍" : "🌲"}
-        </div>
-
-        <div className="text-xl font-semibold mb-2">
-          {modeLabels[mode as keyof typeof modeLabels]}
-        </div>
-
-        <div className="text-sm text-muted-foreground mb-6 max-w-sm">
-          {mode === "rain" && "Soft rain falling — steady, soothing, like the world is washing clean."}
-          {mode === "white-noise" && "A smooth hum that covers the edges of everything else."}
-          {mode === "forest" && "Leaves rustling, birds distant, earth breathing."}
-        </div>
-
-        <div className="flex gap-2 mb-6">
-          {(["rain", "white-noise", "forest"] as const).map((m) => (
-            <button
-              key={m}
-              onClick={() => setMode(m)}
-              className={`rounded-full px-4 py-2 text-sm transition-all ${
-                mode === m
-                  ? "bg-primary/10 text-primary border border-primary/30"
-                  : "bg-white/5 text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {modeLabels[m].replace(/ [.]/g, "")}
-            </button>
-          ))}
-        </div>
-
-        <div className="text-xs text-muted-foreground/50">
-          Press 1, 2, or 3 to switch while playing
-        </div>
-      </div>
-
-      <div className="flex items-center justify-center gap-3 mt-4">
-        {state === "idle" && (
-          <button onClick={() => setState("running")} className="aurora flex items-center gap-2 rounded-full px-6 py-3 text-sm font-medium shadow-lg hover:scale-[1.02] transition-transform">
-            <Play className="size-4" />
-            {t("practice.start")}
-          </button>
-        )}
-        {state === "running" && (
-          <button onClick={() => setState("paused")} className="glass-soft flex items-center gap-2 rounded-full px-5 py-3 text-sm hover:bg-white/10 transition-colors">
-            <Pause className="size-4" />
-            {t("practice.pause")}
-          </button>
-        )}
-        {state === "paused" && (
-          <button onClick={() => setState("running")} className="glass-soft flex items-center gap-2 rounded-full px-5 py-3 text-sm hover:bg-white/10 transition-colors">
-            <Play className="size-4" />
-            {t("practice.resume")}
-          </button>
-        )}
-        {state === "running" || state === "paused" ? (
-          <button onClick={() => setState("done")} className="glass-soft flex items-center gap-2 rounded-full px-5 py-3 text-sm text-muted-foreground hover:text-foreground transition-colors">
-            <SkipForward className="size-4" />
-            {t("practice.skip")}
-          </button>
-        ) : null}
-      </div>
-    </div>
-  );
-}
+/* ---------------------------------------------------------------------------
+ * Main Practices Page
+ * --------------------------------------------------------------------------- */
 
 export default function PracticesPage() {
-  const { t } = useLanguage();
-  const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
+  const { t: _t } = useLanguage();
+  const [selectedId, setSelectedId] = useState<ExerciseType | null>(null);
+
+  const selectedExercise = EXERCISES.find((e) => e.id === selectedId);
 
   return (
-    <main className="flex-1 flex flex-col max-w-5xl w-full mx-auto p-4 sm:p-6 lg:p-8 h-[calc(100vh-160px)]">
-      <div className="flex flex-col items-center mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-        <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-center">
-          {t("practices.title")}
-        </h1>
-        <p className="mt-3 text-muted-foreground text-center text-lg max-w-lg">
-          {t("practices.subtitle")}
-        </p>
-      </div>
-
-      {selectedExercise ? (
-        <div className="flex-1">
-          <div className="flex items-center gap-4 mb-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <button
-              onClick={() => setSelectedExercise(null)}
-              className="glass-soft flex items-center gap-2 rounded-full px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              ← Back
-            </button>
-            <span className="text-sm text-muted-foreground/70">
-              {selectedExercise.icon} {t(selectedExercise.titleKey)}
-            </span>
-          </div>
-          <div className="h-[calc(100%-80px)]">
-            {selectedExercise.id === "box-breathing" && <BoxBreathingExercise t={t} />}
-            {selectedExercise.id === "body-scan" && <BodyScanExercise t={t} />}
-            {selectedExercise.id === "journaling" && <JournalingExercise t={t} />}
-            {selectedExercise.id === "soundscape" && <SoundscapeExercise t={t} />}
-          </div>
+    <main className="flex-1 flex flex-col max-w-5xl w-full mx-auto p-4 sm:p-6 lg:p-8 min-h-[calc(100vh-140px)]">
+      {/* Header */}
+      {!selectedId ? (
+        <div className="flex flex-col items-center mb-8 text-center animate-in fade-in duration-500">
+          <span className="aurora halo mb-3 flex size-14 items-center justify-center rounded-full">
+            <Wind className="size-6 text-primary-foreground" />
+          </span>
+          <h1 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight">
+            Practices & Grounding
+          </h1>
+          <p className="mt-2 text-muted-foreground text-sm sm:text-base max-w-md">
+            Evidence-backed breathing, body awareness, and grounding techniques to regulate your nervous system.
+          </p>
         </div>
       ) : (
-        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-5 relative z-10">
-          {exercises.map((ex, i) => (
-            <div
-              key={ex.id}
-              onClick={() => setSelectedExercise(ex)}
-              className={`glass p-6 rounded-3xl flex items-start gap-4 transition-all hover:scale-[1.01] cursor-pointer group border border-transparent hover:border-white/10`}
-            >
-              <div className={`aurora bg-gradient-to-br ${ex.color} flex size-12 shrink-0 items-center justify-center rounded-full mt-1`}>
-                <span className="text-xl">{ex.icon}</span>
-              </div>
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-foreground/90 group-hover:text-foreground transition-colors">
-                  {t(ex.titleKey)}
-                </h3>
-                <p className="text-sm text-muted-foreground mt-1 group-hover:text-muted-foreground/80 transition-colors">
-                  {t(ex.descKey)}
-                </p>
-              </div>
-              <Play className="size-5 text-muted-foreground/30 group-hover:text-primary-foreground group-hover:scale-110 transition-all ml-auto mt-1" />
-            </div>
-          ))}
+        <div className="flex items-center justify-between mb-4">
+          <button
+            onClick={() => setSelectedId(null)}
+            className="glass-soft flex items-center gap-2 rounded-full px-4 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="size-3.5" />
+            Back to practices
+          </button>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>{selectedExercise?.icon}</span>
+            <span className="font-medium text-foreground">{selectedExercise?.title}</span>
+          </div>
         </div>
       )}
+
+      {/* Content */}
+      <div className="flex-1">
+        {!selectedId ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {EXERCISES.map((ex) => (
+              <div
+                key={ex.id}
+                onClick={() => setSelectedId(ex.id)}
+                className="glass group p-6 rounded-3xl flex items-start gap-4 transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/10 cursor-pointer"
+              >
+                <div className={`aurora bg-gradient-to-br ${ex.color} flex size-12 shrink-0 items-center justify-center rounded-2xl text-xl`}>
+                  {ex.icon}
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-display text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
+                      {ex.title}
+                    </h3>
+                    <span className="text-[11px] font-medium text-muted-foreground bg-white/5 rounded-full px-2.5 py-0.5">
+                      {ex.duration}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">{ex.desc}</p>
+                  <div className="mt-3 text-[11px] text-primary/80 flex items-center gap-1.5">
+                    <Sparkles className="size-3" />
+                    <span>{ex.bestFor}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="h-[560px]">
+            {selectedId === "belly-breathing" && (
+              <PacedBreathing
+                title="Easy Belly Breathing"
+                bestFor="General stress & nervous system balance"
+                totalCycles={4}
+                phases={[
+                  { name: "Inhale gently", durationSec: 4, visual: "inhale", color: "text-cyan-400" },
+                  { name: "Exhale softly", durationSec: 4, visual: "exhale", color: "text-teal-400" },
+                ]}
+              />
+            )}
+            {selectedId === "box-breathing" && (
+              <PacedBreathing
+                title="Box Breathing"
+                bestFor="Focus, overwhelm & grounding"
+                totalCycles={4}
+                phases={[
+                  { name: "Inhale", durationSec: 4, visual: "inhale", color: "text-cyan-400" },
+                  { name: "Hold gently", durationSec: 4, visual: "hold", color: "text-blue-400" },
+                  { name: "Exhale", durationSec: 4, visual: "exhale", color: "text-indigo-400" },
+                  { name: "Hold gently", durationSec: 4, visual: "hold", color: "text-blue-400" },
+                ]}
+              />
+            )}
+            {selectedId === "4-7-8" && (
+              <PacedBreathing
+                title="4-7-8 Breathing"
+                bestFor="Deep wind-down & soothing racing thoughts"
+                totalCycles={4}
+                phases={[
+                  { name: "Inhale deep", durationSec: 4, visual: "inhale", color: "text-indigo-400" },
+                  { name: "Hold tranquil", durationSec: 7, visual: "hold", color: "text-purple-400" },
+                  { name: "Audible exhale", durationSec: 8, visual: "exhale", color: "text-pink-400" },
+                ]}
+              />
+            )}
+            {selectedId === "extended-exhale" && (
+              <PacedBreathing
+                title="Extended Exhale"
+                bestFor="Physical tension & racing pulse"
+                totalCycles={5}
+                phases={[
+                  { name: "Inhale", durationSec: 4, visual: "inhale", color: "text-amber-400" },
+                  { name: "Slow long exhale", durationSec: 7, visual: "exhale", color: "text-orange-400" },
+                ]}
+              />
+            )}
+            {selectedId === "grounding-54321" && <Grounding54321 />}
+            {selectedId === "body-scan" && <BodyScanExercise />}
+            {selectedId === "soundscape" && <SoundscapeExercise />}
+          </div>
+        )}
+      </div>
     </main>
   );
 }

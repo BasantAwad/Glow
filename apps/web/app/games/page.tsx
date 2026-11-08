@@ -1,616 +1,769 @@
 "use client";
 
 /**
- * Games — lightweight focus & mindfulness mini-games.
+ * Relaxation & Calming Mini-Games
  *
- * Each game is a self-contained React component with its own state machine.
- * No backend required — scores are kept in-session only (no PII).
+ * Designed exclusively for anxiety de-escalation, sensory grounding, and non-demanding focus.
+ * No timers, no scores, no leaderboards, no failure states.
  *
- * Games included:
- *  - Breathing Pacer: follow the expanding/contracting circle.
- *  - Mood Match: pair emotion words with their faces (memory-style).
- *  - Focus Tap: tap in rhythm — a simple tempo-following exercise.
- *  - Gratitude Garden: plant a seed for each thing you're grateful for.
+ * Games:
+ *  1. Color Glow: Interactive Canvas coloring with peaceful scenes
+ *  2. Breathing Bubble: Inhale to inflate, release to float
+ *  3. Sand Garden: Zen sand raking with pebbles
+ *  4. Pattern Tracing: Mindful path tracing synced with breath
+ *  5. Memory Garden: Plant a flower for each positive moment
+ *  6. Rhythm Tap: 60 BPM gentle pulse
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLanguage } from "../../contexts/LanguageContext";
 import {
-  Play,
-  Pause,
-  RotateCcw,
-  SkipForward,
-  Check,
-  Flower2,
-  Heart,
-  Brain,
+  Palette,
   Wind,
-  Loader2,
+  Sparkles,
+  Flower2,
+  Compass,
+  Volume2,
+  VolumeX,
+  RotateCcw,
+  Download,
+  Check,
+  ArrowLeft,
+  Undo2,
 } from "lucide-react";
 
-/* ---------------------------------------------------------------------------
- * Shared types
- * --------------------------------------------------------------------------- */
-
-type GameId = "breathing" | "moodmatch" | "focustap" | "gratitudes";
+type GameId = "color-glow" | "breathing-bubble" | "sand-garden" | "pattern-tracing" | "memory-garden" | "rhythm-tap";
 
 interface GameDef {
   id: GameId;
-  titleKey: string;
-  descKey: string;
+  title: string;
+  desc: string;
   icon: React.ElementType;
   color: string;
 }
 
-const games: GameDef[] = [
+const GAME_DEFS: GameDef[] = [
   {
-    id: "breathing",
-    titleKey: "games.breathing.title",
-    descKey: "games.breathing.desc",
+    id: "color-glow",
+    title: "Color Glow",
+    desc: "Color calming mandalas and night skies with soothing pastel palettes. No right or wrong.",
+    icon: Palette,
+    color: "from-pink-500/20 to-violet-500/10",
+  },
+  {
+    id: "breathing-bubble",
+    title: "Breathing Bubble",
+    desc: "Expand a gentle glowing bubble on your inhale, watch it float calmly as you exhale.",
     icon: Wind,
     color: "from-cyan-500/20 to-blue-500/10",
   },
   {
-    id: "moodmatch",
-    titleKey: "games.moodmatch.title",
-    descKey: "games.moodmatch.desc",
-    icon: Heart,
-    color: "from-purple-500/20 to-pink-500/10",
-  },
-  {
-    id: "focustap",
-    titleKey: "games.focustap.title",
-    descKey: "games.focustap.desc",
-    icon: Brain,
+    id: "sand-garden",
+    title: "Zen Sand Garden",
+    desc: "Drag your finger to rake peaceful ripples in dry raked sand and place smooth river stones.",
+    icon: Compass,
     color: "from-amber-500/20 to-orange-500/10",
   },
   {
-    id: "gratitudes",
-    titleKey: "games.gratitudes.title",
-    descKey: "games.gratitudes.desc",
+    id: "pattern-tracing",
+    title: "Pattern Tracing",
+    desc: "Trace slow flowing spiral curves. Synchronizes hand-eye focus with a resting pulse.",
+    icon: Sparkles,
+    color: "from-teal-500/20 to-emerald-500/10",
+  },
+  {
+    id: "memory-garden",
+    title: "Memory Garden",
+    desc: "Plant a blossom for each small thing that went okay today. Nurture your private garden.",
     icon: Flower2,
-    color: "from-emerald-500/20 to-teal-500/10",
+    color: "from-emerald-500/20 to-green-500/10",
+  },
+  {
+    id: "rhythm-tap",
+    title: "Gentle Rhythm Tap",
+    desc: "Tap in sync with a steady 60 BPM heartbeat pulse. Grounds a racing autonomic pulse.",
+    icon: Compass,
+    color: "from-purple-500/20 to-indigo-500/10",
   },
 ];
 
 /* ---------------------------------------------------------------------------
- * 1. Breathing Pacer
+ * 1. Color Glow Mini-Game
  * --------------------------------------------------------------------------- */
 
-function BreathingPacer({ t }: { t: (key: string) => string }) {
-  const [phase, setPhase] = useState<"idle" | "inhale" | "hold" | "exhale" | "done">("idle");
-  const [cycle, setCycle] = useState(0);
-  const MAX_CYCLES = 4;
+function ColorGlowGame() {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [currentColor, setCurrentColor] = useState("#818cf8"); // Soft indigo
+  const [brushSize, setBrushSize] = useState(12);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const historyRef = useRef<ImageData[]>([]);
 
-  const start = () => {
-    setCycle(0);
+  const PALETTE = [
+    "#f472b6", // Rose
+    "#c084fc", // Lavender
+    "#818cf8", // Soft Indigo
+    "#38bdf8", // Sky Blue
+    "#34d399", // Mint Green
+    "#fbbf24", // Warm Amber
+    "#fb923c", // Peach
+    "#ffffff", // Moonlight White
+    "#1e293b", // Deep Charcoal
+  ];
+
+  // Initialize scene
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Fill background
+    ctx.fillStyle = "#0f172a";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Draw peaceful lotus/mandala guide lines in soft faint white
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+    ctx.lineWidth = 1.5;
+
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+
+    // Concentric circles
+    [40, 80, 130, 180].forEach((r) => {
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.stroke();
+    });
+
+    // Petal rays
+    for (let i = 0; i < 12; i++) {
+      const angle = (i * Math.PI) / 6;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.cos(angle) * 180, cy + Math.sin(angle) * 180);
+      ctx.stroke();
+    }
+
+    // Save initial state
+    historyRef.current = [ctx.getImageData(0, 0, canvas.width, canvas.height)];
+  }, []);
+
+  const startDraw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    setIsDrawing(true);
+    const rect = canvas.getBoundingClientRect();
+    const x = "touches" in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
+    const y = "touches" in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
+
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.strokeStyle = currentColor;
+    ctx.fillStyle = currentColor;
+    ctx.lineWidth = brushSize;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = currentColor;
+
+    ctx.arc(x, y, brushSize / 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+  };
+
+  const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if (!isDrawing) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = "touches" in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
+    const y = "touches" in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
+
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  };
+
+  const stopDraw = () => {
+    if (!isDrawing) return;
+    setIsDrawing(false);
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.closePath();
+
+    // Push to undo stack (max 15 steps)
+    if (historyRef.current.length >= 15) historyRef.current.shift();
+    historyRef.current.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+  };
+
+  const undo = () => {
+    if (historyRef.current.length <= 1) return;
+    historyRef.current.pop();
+    const prev = historyRef.current[historyRef.current.length - 1];
+    const canvas = canvasRef.current;
+    if (!canvas || !prev) return;
+    const ctx = canvas.getContext("2d");
+    if (ctx) ctx.putImageData(prev, 0, 0);
+  };
+
+  const saveArtwork = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const url = canvas.toDataURL("image/png");
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `glow-artwork-${new Date().toISOString().slice(0, 10)}.png`;
+    a.click();
+  };
+
+  return (
+    <div className="glass rounded-3xl p-6 sm:p-8 flex flex-col items-center">
+      <div className="flex flex-wrap items-center justify-between w-full max-w-lg mb-4 gap-3">
+        <div>
+          <h3 className="font-display text-xl font-semibold">Color Glow Mandala</h3>
+          <p className="text-xs text-muted-foreground">Paint glowing colors along the guide lines.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={undo}
+            className="glass-soft rounded-full p-2.5 text-muted-foreground hover:text-foreground transition-colors"
+            title="Undo"
+          >
+            <Undo2 className="size-4" />
+          </button>
+          <button
+            onClick={saveArtwork}
+            className="aurora halo rounded-full px-4 py-2 text-xs font-medium text-primary-foreground flex items-center gap-1.5"
+          >
+            <Download className="size-3.5" />
+            Save
+          </button>
+        </div>
+      </div>
+
+      {/* Canvas */}
+      <div className="rounded-3xl overflow-hidden shadow-2xl border border-white/10 touch-none mb-6">
+        <canvas
+          ref={canvasRef}
+          width={440}
+          height={440}
+          className="cursor-crosshair bg-slate-950 w-full max-w-[360px] sm:max-w-[440px] aspect-square block"
+          onMouseDown={startDraw}
+          onMouseMove={draw}
+          onMouseUp={stopDraw}
+          onMouseLeave={stopDraw}
+          onTouchStart={startDraw}
+          onTouchMove={draw}
+          onTouchEnd={stopDraw}
+        />
+      </div>
+
+      {/* Color Palette */}
+      <div className="flex flex-wrap items-center justify-center gap-2 max-w-lg">
+        {PALETTE.map((c) => (
+          <button
+            key={c}
+            onClick={() => setCurrentColor(c)}
+            style={{ backgroundColor: c }}
+            className={`size-8 rounded-full transition-transform ${
+              currentColor === c ? "scale-125 ring-2 ring-primary ring-offset-2 ring-offset-slate-900" : "hover:scale-110"
+            }`}
+          />
+        ))}
+        <div className="h-6 w-[1px] bg-white/10 mx-2" />
+        <input
+          type="range"
+          min="4"
+          max="32"
+          value={brushSize}
+          onChange={(e) => setBrushSize(Number(e.target.value))}
+          className="w-24 accent-primary"
+        />
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+ * 2. Breathing Bubble Game
+ * --------------------------------------------------------------------------- */
+
+function BreathingBubbleGame() {
+  const [phase, setPhase] = useState<"idle" | "inhale" | "hold" | "exhale" | "popped">("idle");
+  const [cycle, setCycle] = useState(0);
+
+  const startBubble = () => {
     setPhase("inhale");
   };
 
   useEffect(() => {
-    if (phase === "done") return;
+    if (phase === "idle" || phase === "popped") return;
     let timer: ReturnType<typeof setTimeout>;
+
     if (phase === "inhale") {
       timer = setTimeout(() => setPhase("hold"), 4000);
     } else if (phase === "hold") {
-      timer = setTimeout(() => setPhase("exhale"), 4000);
+      timer = setTimeout(() => setPhase("exhale"), 3000);
     } else if (phase === "exhale") {
       timer = setTimeout(() => {
-        if (cycle + 1 >= MAX_CYCLES) {
-          setPhase("done");
-        } else {
-          setCycle((c) => c + 1);
-          setPhase("inhale");
-        }
-      }, 6000);
+        setCycle((c) => c + 1);
+        setPhase("popped");
+        setTimeout(() => setPhase("inhale"), 1500);
+      }, 5000);
     }
+
     return () => clearTimeout(timer);
-  }, [phase, cycle]);
+  }, [phase]);
 
-  const reset = () => {
-    setPhase("idle");
-    setCycle(0);
-  };
-
-  const getLabel = () => {
-    if (phase === "idle") return "";
-    if (phase === "inhale") return t("games.breathing.inhale");
-    if (phase === "hold") return t("games.breathing.hold");
-    if (phase === "exhale") return t("games.breathing.exhale");
-    if (phase === "done") return t("games.breathing.done");
-    return "";
-  };
-
-  const sizeClass = phase === "inhale" ? "scale-125" : phase === "exhale" ? "scale-90" : "scale-100";
+  const sizeClass =
+    phase === "inhale"
+      ? "scale-[2.2] transition-transform duration-[4000ms] ease-out"
+      : phase === "hold"
+      ? "scale-[2.2] animate-pulse duration-700"
+      : phase === "exhale"
+      ? "scale-100 transition-transform duration-[5000ms] ease-in"
+      : "scale-0 transition-transform duration-300";
 
   return (
-    <div className="glass rounded-3xl p-8 sm:p-10 text-center h-full flex flex-col items-center justify-center">
-      {phase === "done" ? (
-        <>
-          <div className="aurora halo rounded-full w-20 h-20 flex items-center justify-center mb-4">
-            <Check className="size-8 text-primary-foreground" />
-          </div>
-          <h3 className="text-xl font-semibold mb-2">{t("games.breathing.complete")}</h3>
-          <p className="text-sm text-muted-foreground mb-6">{cycle} full breaths completed.</p>
-          <button onClick={reset} className="glass-soft rounded-full px-6 py-3 text-sm">
-            {t("games.breathing.again")}
-          </button>
-        </>
+    <div className="glass rounded-3xl p-8 text-center h-[520px] flex flex-col justify-between items-center">
+      <div>
+        <h3 className="font-display text-2xl font-semibold">Breathing Bubble</h3>
+        <p className="text-xs text-muted-foreground mt-1">Inhale as the bubble swells. Let it float gently on exhale.</p>
+      </div>
+
+      <div className="flex-1 flex flex-col items-center justify-center relative w-full overflow-hidden">
+        {/* Shimmering iridescent bubble */}
+        <div
+          className={`size-24 rounded-full bg-gradient-to-tr from-cyan-400/40 via-pink-400/30 to-indigo-400/50 backdrop-blur-md shadow-2xl border border-white/40 flex items-center justify-center text-primary-foreground ${sizeClass}`}
+        >
+          <div className="size-6 rounded-full bg-white/40 blur-[2px] absolute top-3 left-4" />
+        </div>
+
+        <span className="font-display text-2xl font-semibold mt-16 capitalize">
+          {phase === "idle" ? "Ready" : phase === "popped" ? "Soft Release ✨" : phase}
+        </span>
+        <span className="text-xs text-muted-foreground mt-1">
+          {phase === "inhale"
+            ? "Breathe in slowly..."
+            : phase === "hold"
+            ? "Hold gently..."
+            : phase === "exhale"
+            ? "Exhale smoothly..."
+            : "Completed breaths: " + cycle}
+        </span>
+      </div>
+
+      {phase === "idle" ? (
+        <button
+          onClick={startBubble}
+          className="aurora halo rounded-full px-8 py-3 text-sm font-medium text-primary-foreground transition-transform hover:scale-105"
+        >
+          Begin breathing bubble
+        </button>
       ) : (
-        <>
-          <div className={`aurora halo rounded-full transition-all duration-1000 ease-in-out ${sizeClass}`}>
-            <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-full bg-gradient-to-br from-cyan-500/20 to-blue-500/10 flex items-center justify-center">
-              <span className="text-4xl sm:text-5xl">{phase === "inhale" ? "🌬️" : phase === "exhale" ? "💨" : "⏸️"}</span>
-            </div>
-          </div>
-          <p className="mt-8 text-sm text-muted-foreground h-5">{getLabel()}</p>
-          <p className="text-xs text-muted-foreground/60">
-            Cycle {cycle + 1} of {MAX_CYCLES}
-          </p>
-          <div className="mt-8 flex gap-3">
-            {phase === "idle" && (
-              <button onClick={start} className="aurora halo rounded-full px-8 py-3.5 text-sm font-medium text-primary-foreground flex items-center gap-2">
-                <Play className="size-4" /> {t("games.start")}
-              </button>
-            )}
-            {(phase === "inhale" || phase === "hold" || phase === "exhale") && (
-              <button onClick={reset} className="glass-soft rounded-full px-6 py-3 text-sm">
-                <SkipForward className="size-4 inline mr-1" /> {t("games.skip")}
-              </button>
-            )}
-          </div>
-        </>
+        <button
+          onClick={() => setPhase("idle")}
+          className="glass-soft rounded-full px-6 py-2.5 text-xs text-muted-foreground hover:text-foreground"
+        >
+          Reset
+        </button>
       )}
-      <p className="mt-6 text-[11px] text-muted-foreground/60">
-        {t("games.breathing.hint")}
-      </p>
     </div>
   );
 }
 
 /* ---------------------------------------------------------------------------
- * 2. Mood Match (memory pairing game)
+ * 3. Zen Sand Garden Game
  * --------------------------------------------------------------------------- */
 
-function MoodMatch({ t }: { t: (key: string) => string }) {
-  const MOODS = [
-    { emoji: "😞", label: "low" },
-    { emoji: "😐", label: "okay" },
-    { emoji: "🙂", label: "good" },
-    { emoji: "😊", label: "happy" },
-    { emoji: "😄", label: "great" },
-    { emoji: "🤩", label: "amazing" },
-  ];
+function SandGardenGame() {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [isRaking, setIsRaking] = useState(false);
+  const stones = useRef<{ x: number; y: number; r: number }[]>([
+    { x: 120, y: 140, r: 24 },
+    { x: 280, y: 220, r: 32 },
+    { x: 190, y: 310, r: 18 },
+  ]);
 
-  const [cards, setCards] = useState<{ id: number; emoji: string; label: string; flipped: boolean; matched: boolean }[]>([]);
-  const [turn, setTurn] = useState(0);
-  const [selected, setSelected] = useState<number | null>(null);
-  const [locked, setLocked] = useState(false);
-  const [matched, setMatched] = useState(0);
-  const [started, setStarted] = useState(false);
+  const initGarden = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
-  const init = () => {
-    const deck = [...MOODS, ...MOODS]
-      .sort(() => Math.random() - 0.5)
-      .map((m, i) => ({ id: i, emoji: m.emoji, label: m.label, flipped: false, matched: false }));
-    setCards(deck);
-    setTurn(0);
-    setSelected(null);
-    setLocked(false);
-    setMatched(0);
-    setStarted(true);
-  };
+    // Soft warm dry sand background
+    ctx.fillStyle = "#272421";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  const flip = (idx: number) => {
-    if (locked || selected === idx || cards[idx].flipped || cards[idx].matched) return;
-    const updated = cards.map((c, i) => (i === idx ? { ...c, flipped: true } : c));
-    setCards(updated);
-    if (selected === null) {
-      setSelected(idx);
-    } else {
-      const first = cards[selected];
-      const second = cards[idx];
-      if (first.label === second.label && first.id !== second.id) {
-        // Match
-        setLocked(true);
-        setTimeout(() => {
-          setCards((prev) =>
-            prev.map((c, i) => (i === selected || i === idx ? { ...c, matched: true } : c))
-          );
-          setMatched((m) => m + 1);
-          setTurn((t) => t + 1);
-          setSelected(null);
-          setLocked(false);
-        }, 600);
-      } else {
-        // No match — flip back
-        setLocked(true);
-        setTimeout(() => {
-          setCards((prev) =>
-            prev.map((c, i) => (i === selected || i === idx ? { ...c, flipped: false } : c))
-          );
-          setTurn((t) => t + 1);
-          setSelected(null);
-          setLocked(false);
-        }, 900);
-      }
+    // Initial peaceful horizontal rake lines
+    ctx.strokeStyle = "rgba(255, 235, 205, 0.08)";
+    ctx.lineWidth = 3;
+    for (let y = 10; y < canvas.height; y += 14) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(canvas.width, y);
+      ctx.stroke();
     }
+
+    // Draw smooth river stones with shadows
+    stones.current.forEach((s) => {
+      ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
+      ctx.shadowBlur = 10;
+      ctx.fillStyle = "#4a453f";
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Stone highlight
+      ctx.fillStyle = "rgba(255, 255, 255, 0.15)";
+      ctx.beginPath();
+      ctx.arc(s.x - s.r / 3, s.y - s.r / 3, s.r / 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.shadowBlur = 0;
+  }, []);
+
+  useEffect(() => {
+    initGarden();
+  }, [initGarden]);
+
+  const rake = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if (!isRaking) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = "touches" in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
+    const y = "touches" in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
+
+    // Draw 3 concentric rake tine grooves
+    [-8, 0, 8].forEach((offset) => {
+      ctx.beginPath();
+      ctx.arc(x + offset, y + offset, 6, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(245, 222, 179, 0.15)";
+      ctx.fill();
+    });
   };
-
-  if (!started) {
-    return (
-      <div className="glass rounded-3xl p-8 sm:p-10 text-center h-full flex flex-col items-center justify-center">
-        <div className="aurora halo rounded-full w-16 h-16 flex items-center justify-center mb-4">
-          <Heart className="size-7 text-primary-foreground" />
-        </div>
-        <h3 className="text-xl font-semibold mb-2">{t("games.moodmatch.title")}</h3>
-        <p className="text-sm text-muted-foreground max-w-xs mb-6">{t("games.moodmatch.desc")}</p>
-        <button onClick={init} className="aurora halo rounded-full px-8 py-3.5 text-sm font-medium text-primary-foreground flex items-center gap-2">
-          <Play className="size-4" /> {t("games.start")}
-        </button>
-      </div>
-    );
-  }
-
-  const allMatched = matched === MOODS.length;
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="flex items-center justify-between mb-4">
+    <div className="glass rounded-3xl p-6 sm:p-8 flex flex-col items-center">
+      <div className="flex items-center justify-between w-full max-w-md mb-4">
         <div>
-          <p className="text-xs text-muted-foreground">{t("games.moodmatch.turns")}: {turn}</p>
-          <p className="text-xs text-muted-foreground">{t("games.moodmatch.matched")}: {matched}/{MOODS.length}</p>
+          <h3 className="font-display text-xl font-semibold">Zen Sand Garden</h3>
+          <p className="text-xs text-muted-foreground">Slowly rake lines in the sand around the stones.</p>
         </div>
-        {allMatched && (
-          <div className="aurora halo rounded-full px-4 py-1.5 text-xs font-medium text-primary-foreground">
-            {t("games.moodmatch.win")}
+        <button
+          onClick={initGarden}
+          className="glass-soft rounded-full px-4 py-2 text-xs flex items-center gap-1.5 hover:text-foreground"
+        >
+          <RotateCcw className="size-3.5" />
+          Smooth Sand
+        </button>
+      </div>
+
+      <div className="rounded-3xl overflow-hidden border border-white/10 shadow-2xl touch-none">
+        <canvas
+          ref={canvasRef}
+          width={400}
+          height={400}
+          className="cursor-pointer max-w-[340px] sm:max-w-[400px] aspect-square block"
+          onMouseDown={() => setIsRaking(true)}
+          onMouseMove={rake}
+          onMouseUp={() => setIsRaking(false)}
+          onTouchStart={() => setIsRaking(true)}
+          onTouchMove={rake}
+          onTouchEnd={() => setIsRaking(false)}
+        />
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+ * 4. Pattern Tracing Game
+ * --------------------------------------------------------------------------- */
+
+function PatternTracingGame() {
+  const [progress, setProgress] = useState(0);
+  const [done, setDone] = useState(false);
+
+  const handlePointer = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (e.buttons !== 1 && e.type !== "pointermove") return;
+    setProgress((p) => {
+      const next = p + 1.2;
+      if (next >= 100) {
+        setDone(true);
+        return 100;
+      }
+      return next;
+    });
+  };
+
+  return (
+    <div className="glass rounded-3xl p-8 text-center h-[520px] flex flex-col justify-between items-center">
+      <div>
+        <h3 className="font-display text-2xl font-semibold">Golden Spiral Tracing</h3>
+        <p className="text-xs text-muted-foreground mt-1">Slowly drag along the spiral path. Match your breath to your pace.</p>
+      </div>
+
+      <div className="flex-1 flex items-center justify-center my-4">
+        <svg
+          width="320"
+          height="320"
+          viewBox="0 0 320 320"
+          className="touch-none cursor-pointer"
+          onPointerMove={handlePointer}
+        >
+          {/* Background spiral track */}
+          <path
+            d="M 160 160 m 0, 0 a 15,15 0 0,1 25,15 a 35,35 0 0,1 -40,35 a 65,65 0 0,1 -65,-55 a 100,100 0 0,1 90,-95 a 135,135 0 0,1 135,120"
+            fill="none"
+            stroke="rgba(255, 255, 255, 0.1)"
+            strokeWidth="24"
+            strokeLinecap="round"
+          />
+
+          {/* Glowing traced path */}
+          <path
+            d="M 160 160 m 0, 0 a 15,15 0 0,1 25,15 a 35,35 0 0,1 -40,35 a 65,65 0 0,1 -65,-55 a 100,100 0 0,1 90,-95 a 135,135 0 0,1 135,120"
+            fill="none"
+            stroke="url(#glowGradient)"
+            strokeWidth="12"
+            strokeDasharray="1000"
+            strokeDashoffset={1000 - progress * 10}
+            strokeLinecap="round"
+          />
+
+          <defs>
+            <linearGradient id="glowGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#a855f7" />
+              <stop offset="50%" stopColor="#ec4899" />
+              <stop offset="100%" stopColor="#f59e0b" />
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+
+      <div className="w-full max-w-xs">
+        <div className="w-full bg-white/5 rounded-full h-1.5 mb-3 overflow-hidden">
+          <div className="h-full aurora transition-all duration-200" style={{ width: `${progress}%` }} />
+        </div>
+        {done ? (
+          <div className="flex items-center justify-center gap-2 text-primary font-medium text-sm animate-in fade-in">
+            <Check className="size-4" />
+            <span>Harmonized and grounded</span>
+            <button onClick={() => { setProgress(0); setDone(false); }} className="text-xs underline ml-2">Trace again</button>
           </div>
+        ) : (
+          <span className="text-xs text-muted-foreground">Drag slowly along the spiral ({Math.round(progress)}%)</span>
         )}
       </div>
-      <div className="grid grid-cols-3 gap-3 flex-1">
-        {cards.map((card) => (
-          <button
-            key={card.id}
-            onClick={() => flip(card.id)}
-            disabled={card.matched || locked || card.flipped}
-            className={`aspect-square rounded-2xl flex items-center justify-center text-3xl transition-all ${
-              card.matched
-                ? "bg-green-500/10 border border-green-500/30"
-                : card.flipped
-                ? "bg-primary/20 border border-primary/40"
-                : "bg-white/5 border border-white/10 hover:bg-white/10"
-            } ${locked ? "opacity-70" : ""}`}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+ * 5. Memory Garden Game
+ * --------------------------------------------------------------------------- */
+
+function MemoryGardenGame() {
+  const [flowers, setFlowers] = useState<{ id: string; text: string; icon: string }[]>([
+    { id: "1", text: "Drank a warm cup of tea quietly", icon: "🌸" },
+    { id: "2", text: "Walked in the cool fresh evening air", icon: "🌼" },
+  ]);
+  const [input, setInput] = useState("");
+
+  const plantFlower = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim()) return;
+    const icons = ["🌸", "🌷", "🌻", "🌺", "🌼", "🌿", "🌱"];
+    const chosen = icons[Math.floor(Math.random() * icons.length)];
+    setFlowers((prev) => [...prev, { id: String(Date.now()), text: input.trim(), icon: chosen }]);
+    setInput("");
+  };
+
+  return (
+    <div className="glass rounded-3xl p-6 sm:p-8 flex flex-col justify-between h-[520px]">
+      <div>
+        <h3 className="font-display text-2xl font-semibold">Memory Garden</h3>
+        <p className="text-xs text-muted-foreground mt-1">
+          Plant a quiet blossom for each small thing that went okay today.
+        </p>
+      </div>
+
+      {/* Garden Canvas */}
+      <div className="flex-1 my-4 glass-soft rounded-2xl p-6 overflow-y-auto flex flex-wrap gap-4 items-end content-end min-h-[220px]">
+        {flowers.map((f) => (
+          <div
+            key={f.id}
+            className="flex flex-col items-center group animate-in zoom-in-50 duration-500 cursor-pointer"
+            title={f.text}
           >
-            {card.flipped || card.matched ? (
-              <span title={card.label}>{card.emoji}</span>
-            ) : (
-              <span className="text-2xl opacity-30">?</span>
-            )}
-          </button>
+            <span className="text-4xl transition-transform group-hover:scale-125 mb-1">{f.icon}</span>
+            <span className="text-[11px] text-muted-foreground/80 max-w-[100px] truncate text-center">
+              {f.text}
+            </span>
+          </div>
         ))}
       </div>
-      {allMatched && (
+
+      {/* Input */}
+      <form onSubmit={plantFlower} className="flex gap-2">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="One small thing that was okay today..."
+          className="flex-1 glass rounded-full px-5 py-3 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+        />
         <button
-          onClick={init}
-          className="mt-4 glass-soft rounded-full px-6 py-3 text-sm"
+          type="submit"
+          disabled={!input.trim()}
+          className="aurora halo rounded-full px-6 py-3 text-xs font-medium text-primary-foreground disabled:opacity-50"
         >
-          {t("games.playAgain")}
+          Plant
         </button>
-      )}
+      </form>
     </div>
   );
 }
 
 /* ---------------------------------------------------------------------------
- * 3. Focus Tap (rhythm game)
+ * 6. Gentle Rhythm Tap (60 BPM)
  * --------------------------------------------------------------------------- */
 
-function FocusTap({ t }: { t: (key: string) => string }) {
-  const [running, setRunning] = useState(false);
-  const [phase, setPhase] = useState<"idle" | "waiting" | "tap" | "miss" | "done">("idle");
-  const [score, setScore] = useState(0);
-  const [beat, setBeat] = useState(0);
-  const [tempo, setTempo] = useState(600);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+function RhythmTapGame() {
+  const [active, setActive] = useState(false);
+  const [pulse, setPulse] = useState(false);
 
-  const BPM = 60;
-  const interval = 60000 / BPM;
+  useEffect(() => {
+    if (!active) return;
+    const interval = setInterval(() => {
+      setPulse(true);
+      setTimeout(() => setPulse(false), 200);
+    }, 1000); // 60 BPM = 1 beat per second
 
-  const start = () => {
-    setScore(0);
-    setBeat(0);
-    setRunning(true);
-    setPhase("waiting");
-    nextBeat();
-  };
-
-  const nextBeat = useCallback(() => {
-    if (!running) return;
-    setPhase("waiting");
-    timeoutRef.current = setTimeout(() => {
-      if (!running) return;
-      setPhase("tap");
-      // Auto-miss if user doesn't tap within 500ms
-      timeoutRef.current = setTimeout(() => {
-        if (running && phase === "tap") {
-          setPhase("miss");
-          setTimeout(() => {
-            if (!running) return;
-            setBeat((b) => b + 1);
-            if (beat + 1 >= 10) {
-              setRunning(false);
-              setPhase("done");
-            } else {
-              setPhase("waiting");
-              nextBeat();
-            }
-          }, 500);
-        }
-      }, interval - 500);
-    }, 0);
-  }, [running, phase, beat, interval]);
-
-  const tap = () => {
-    if (phase === "tap") {
-      setScore((s) => s + 1);
-      setPhase("idle");
-      clearTimeout(timeoutRef.current!);
-      setBeat((b) => {
-        const next = b + 1;
-        if (next >= 10) {
-          setRunning(false);
-          setPhase("done");
-        } else {
-          setPhase("waiting");
-          nextBeat();
-        }
-        return next;
-      });
-    }
-  };
-
-  const stop = () => {
-    setRunning(false);
-    clearTimeout(timeoutRef.current ?? undefined);
-    setPhase("idle");
-  };
-
-  useEffect(() => () => { clearTimeout(timeoutRef.current ?? undefined); }, []);
-
-  if (phase === "done") {
-    return (
-      <div className="glass rounded-3xl p-8 sm:p-10 text-center h-full flex flex-col items-center justify-center">
-        <div className="aurora halo rounded-full w-20 h-20 flex items-center justify-center mb-4">
-          <Check className="size-8 text-primary-foreground" />
-        </div>
-        <h3 className="text-xl font-semibold mb-2">{t("games.focustap.done")}</h3>
-        <p className="text-4xl font-display font-semibold mb-2">{score}/{beat + 1}</p>
-        <p className="text-sm text-muted-foreground mb-6">{t("games.focustap.score")}</p>
-        <button onClick={start} className="aurora halo rounded-full px-8 py-3.5 text-sm font-medium text-primary-foreground flex items-center gap-2">
-          <Play className="size-4" /> {t("games.playAgain")}
-        </button>
-      </div>
-    );
-  }
+    return () => clearInterval(interval);
+  }, [active]);
 
   return (
-    <div className="glass rounded-3xl p-8 sm:p-10 text-center h-full flex flex-col items-center justify-center">
-      <div
-        className={`aurora halo rounded-full transition-all duration-200 ${
-          phase === "tap" ? "size-24 bg-green-400/30" :
-          phase === "waiting" ? "size-20 bg-primary/20" :
-          phase === "miss" ? "size-28 bg-red-400/20" :
-          "size-16"
-        }`}
+    <div className="glass rounded-3xl p-8 text-center h-[520px] flex flex-col justify-between items-center">
+      <div>
+        <h3 className="font-display text-2xl font-semibold">Gentle Rhythm Pulse</h3>
+        <p className="text-xs text-muted-foreground mt-1">A slow 60 BPM pulse. Match your taps or heartbeat to it.</p>
+      </div>
+
+      <div className="flex-1 flex flex-col items-center justify-center">
+        <div
+          className={`size-32 rounded-full flex items-center justify-center transition-all ${
+            pulse
+              ? "aurora halo scale-125 shadow-2xl text-primary-foreground"
+              : "glass scale-100 text-muted-foreground opacity-60"
+          }`}
+          style={{ transitionDuration: "180ms" }}
+        >
+          <span className="text-2xl font-display font-semibold">60 BPM</span>
+        </div>
+        <p className="text-xs text-muted-foreground mt-8">Resting resting pulse rate reference</p>
+      </div>
+
+      <button
+        onClick={() => setActive((a) => !a)}
+        className="aurora halo rounded-full px-8 py-3 text-sm font-medium text-primary-foreground"
       >
-        {phase === "tap" && <span className="text-2xl">👆</span>}
-        {phase === "miss" && <span className="text-2xl">💔</span>}
-        {phase === "waiting" && <span className="text-xl animate-pulse">●</span>}
-      </div>
-      <p className="mt-6 text-sm text-muted-foreground h-5">
-        {phase === "idle" && t("games.focustap.start")}
-        {phase === "waiting" && t("games.focustap.wait")}
-        {phase === "tap" && t("games.focustap.tap")}
-        {phase === "miss" && t("games.focustap.miss")}
-      </p>
-      <p className="text-xs text-muted-foreground mt-2">
-        {t("games.focustap.score")}: {score}
-      </p>
-      <div className="mt-6 flex gap-3">
-        {phase === "idle" && (
-          <button onClick={start} className="aurora halo rounded-full px-8 py-3.5 text-sm font-medium text-primary-foreground flex items-center gap-2">
-            <Play className="size-4" /> {t("games.start")}
-          </button>
-        )}
-        {(phase === "waiting" || phase === "tap" || phase === "miss") && (
-          <button onClick={stop} className="glass-soft rounded-full px-6 py-3 text-sm">
-            {t("games.stop")}
-          </button>
-        )}
-        {phase === "tap" && (
-          <button
-            onClick={tap}
-            className="aurora halo rounded-full w-16 h-16 flex items-center justify-center text-primary-foreground text-2xl transition-transform active:scale-90"
-          >
-            👆
-          </button>
-        )}
-      </div>
-      <p className="mt-6 text-[11px] text-muted-foreground/60">
-        {t("games.focustap.hint")}
-      </p>
+        {active ? "Stop rhythm" : "Start 60 BPM rhythm"}
+      </button>
     </div>
   );
 }
 
 /* ---------------------------------------------------------------------------
- * 4. Gratitude Garden
- * --------------------------------------------------------------------------- */
-
-interface Plant {
-  id: number;
-  text: string;
-  emoji: string;
-  plantedAt: number;
-}
-
-const PLANT_EMOJIS = ["🌱", "🌿", "🌸", "🌻", "🌺", "🌷", "🌹", "🌼", "🍀", "🌿"];
-
-function GratitudeGarden({ t }: { t: (key: string) => string }) {
-  const [plants, setPlants] = useState<Plant[]>([]);
-  const [draft, setDraft] = useState("");
-  const [plantedCount, setPlantedCount] = useState(0);
-
-  const plant = () => {
-    const text = draft.trim();
-    if (!text || plants.length >= 12) return;
-    const newPlant: Plant = {
-      id: plantedCount,
-      text,
-      emoji: PLANT_EMOJIS[plants.length % PLANT_EMOJIS.length],
-      plantedAt: Date.now(),
-    };
-    setPlants((prev) => [...prev, newPlant]);
-    setPlantedCount((c) => c + 1);
-    setDraft("");
-  };
-
-  const remove = (id: number) => {
-    setPlants((prev) => prev.filter((p) => p.id !== id));
-  };
-
-  return (
-    <div className="h-full flex flex-col">
-      <div className="glass rounded-3xl p-6 mb-4">
-        <p className="text-sm font-medium mb-3">{t("games.gratitudes.prompt")}</p>
-        <div className="flex gap-2">
-          <input
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && plant()}
-            placeholder={t("games.gratitudes.placeholder")}
-            className="flex-1 glass-soft rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            maxLength={200}
-          />
-          <button
-            onClick={plant}
-            disabled={!draft.trim() || plants.length >= 12}
-            className="aurora halo rounded-full px-5 py-3 text-sm font-medium text-primary-foreground disabled:opacity-50 flex items-center gap-2"
-          >
-            <Flower2 className="size-3.5" /> {t("games.gratitudes.plant")}
-          </button>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-        {plants.length === 0 ? (
-          <p className="text-center text-sm text-muted-foreground py-8">
-            {t("games.gratitudes.empty")}
-          </p>
-        ) : (
-          plants.map((p) => (
-            <div
-              key={p.id}
-              className="glass rounded-2xl p-4 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300"
-            >
-              <span className="text-2xl">{p.emoji}</span>
-              <span className="text-sm flex-1 text-foreground/90">{p.text}</span>
-              <button
-                onClick={() => remove(p.id)}
-                className="text-muted-foreground/50 hover:text-destructive transition-colors text-lg leading-none"
-                aria-label={t("games.gratitudes.remove")}
-              >
-                ✕
-              </button>
-            </div>
-          ))
-        )}
-      </div>
-
-      {plants.length > 0 && (
-        <p className="mt-3 text-[11px] text-muted-foreground/60 text-center">
-          {plants.length} {t("games.gratitudes.plants")} · {t("games.gratitudes.water")}
-        </p>
-      )}
-    </div>
-  );
-}
-
-/* ---------------------------------------------------------------------------
- * Page
+ * Main Games Hub Page
  * --------------------------------------------------------------------------- */
 
 export default function GamesPage() {
-  const { t } = useLanguage();
-  const [active, setActive] = useState<GameId | null>(null);
+  const [selectedGame, setSelectedGame] = useState<GameId | null>(null);
+
+  const selectedDef = GAME_DEFS.find((g) => g.id === selectedGame);
 
   return (
-    <main className="flex-1 flex flex-col max-w-5xl w-full mx-auto p-4 sm:p-6 lg:p-8 h-[calc(100vh-160px)]">
-      <div className="flex flex-col items-center mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-        <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-center font-display">
-          {t("games.title")}
-        </h1>
-        <p className="mt-3 text-muted-foreground text-center text-lg max-w-lg">
-          {t("games.subtitle")}
-        </p>
-      </div>
-
-      {active ? (
-        <div className="flex-1">
-          <div className="flex items-center gap-4 mb-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <button
-              onClick={() => setActive(null)}
-              className="glass-soft flex items-center gap-2 rounded-full px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              ← {t("games.back")}
-            </button>
-            <span className="text-sm text-muted-foreground/70">
-              {(() => {
-                const g = games.find((gg) => gg.id === active);
-                if (!g) return null;
-                const Icon = g.icon;
-                return (
-                  <span className="inline-flex items-center gap-1">
-                    <Icon className="size-4" />
-                    {t(g.titleKey)}
-                  </span>
-                );
-              })()}
-            </span>
-          </div>
-          <div className="h-[calc(100%-80px)]">
-            {active === "breathing" && <BreathingPacer t={t} />}
-            {active === "moodmatch" && <MoodMatch t={t} />}
-            {active === "focustap" && <FocusTap t={t} />}
-            {active === "gratitudes" && <GratitudeGarden t={t} />}
-          </div>
+    <main className="flex-1 flex flex-col max-w-5xl w-full mx-auto p-4 sm:p-6 lg:p-8 min-h-[calc(100vh-140px)]">
+      {!selectedGame ? (
+        <div className="flex flex-col items-center mb-8 text-center animate-in fade-in duration-500">
+          <span className="aurora halo mb-3 flex size-14 items-center justify-center rounded-full">
+            <Sparkles className="size-6 text-primary-foreground" />
+          </span>
+          <h1 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight">
+            Mindful Mini-Games
+          </h1>
+          <p className="mt-2 text-muted-foreground text-sm sm:text-base max-w-md">
+            No scores, no countdowns, and no failure states. Gentle tactile interactions to ease rumination.
+          </p>
         </div>
       ) : (
-        <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-5 relative z-10">
-          {games.map((g) => (
-            <div
-              key={g.id}
-              onClick={() => setActive(g.id)}
-              className="glass p-6 rounded-3xl flex items-start gap-4 transition-all hover:scale-[1.01] cursor-pointer group border border-transparent hover:border-white/10"
-            >
-              <div
-                className={`aurora bg-gradient-to-br ${g.color} flex size-12 shrink-0 items-center justify-center rounded-full mt-1`}
-              >
-                <g.icon className="size-5 text-primary-foreground" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-foreground/90 group-hover:text-foreground transition-colors">
-                  {t(g.titleKey)}
-                </h3>
-                <p className="text-sm text-muted-foreground mt-1 group-hover:text-muted-foreground/80 transition-colors">
-                  {t(g.descKey)}
-                </p>
-              </div>
-              <Play className="size-5 text-muted-foreground/30 group-hover:text-primary-foreground group-hover:scale-110 transition-all ml-auto mt-1" />
-            </div>
-          ))}
+        <div className="flex items-center justify-between mb-4">
+          <button
+            onClick={() => setSelectedGame(null)}
+            className="glass-soft flex items-center gap-2 rounded-full px-4 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="size-3.5" />
+            Back to games
+          </button>
+          <span className="text-xs font-medium text-foreground">{selectedDef?.title}</span>
         </div>
       )}
+
+      <div className="flex-1">
+        {!selectedGame ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {GAME_DEFS.map((g) => {
+              const Icon = g.icon;
+              return (
+                <div
+                  key={g.id}
+                  onClick={() => setSelectedGame(g.id)}
+                  className="glass group p-6 rounded-3xl flex flex-col justify-between transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/10 cursor-pointer"
+                >
+                  <div>
+                    <div className={`aurora bg-gradient-to-br ${g.color} flex size-12 items-center justify-center rounded-2xl mb-4`}>
+                      <Icon className="size-5 text-primary-foreground" />
+                    </div>
+                    <h3 className="font-display text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
+                      {g.title}
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                      {g.desc}
+                    </p>
+                  </div>
+                  <div className="mt-6 flex items-center gap-1 text-xs font-medium text-primary">
+                    <span>Play quietly</span>
+                    <span>→</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div>
+            {selectedGame === "color-glow" && <ColorGlowGame />}
+            {selectedGame === "breathing-bubble" && <BreathingBubbleGame />}
+            {selectedGame === "sand-garden" && <SandGardenGame />}
+            {selectedGame === "pattern-tracing" && <PatternTracingGame />}
+            {selectedGame === "memory-garden" && <MemoryGardenGame />}
+            {selectedGame === "rhythm-tap" && <RhythmTapGame />}
+          </div>
+        )}
+      </div>
     </main>
   );
 }

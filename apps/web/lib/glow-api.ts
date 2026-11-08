@@ -127,17 +127,39 @@ export async function ensureSession(): Promise<{ token: string; userId: string }
   return { token: data.token, userId: data.user_id };
 }
 
-export type StartSessionResult = { sessionId: string; state: string };
+export type StartSessionResult = { sessionId: string; state: string; mode: string; inputModality: string };
 
-export async function startGlowSession(): Promise<StartSessionResult> {
+/**
+ * Start a new Glow session.
+ * @param mode - 'open' | 'listen_only' | 'guided' (default: 'open')
+ * @param inputModality - 'text' | 'voice' (default: 'text')
+ */
+export async function startGlowSession(
+  mode: string = "open",
+  inputModality: string = "text",
+): Promise<StartSessionResult> {
   const { token } = await ensureSession();
   const res = await apiFetch(`${API_BASE}/sessions`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ mode, input_modality: inputModality }),
   });
   if (!res.ok) await throwApiError(res, "Could not start a support session.");
-  const data = (await res.json()) as { session_id: string; state: string };
-  return { sessionId: data.session_id, state: data.state };
+  const data = (await res.json()) as {
+    session_id: string;
+    state: string;
+    mode: string;
+    input_modality: string;
+  };
+  return {
+    sessionId: data.session_id,
+    state: data.state,
+    mode: data.mode ?? mode,
+    inputModality: data.input_modality ?? inputModality,
+  };
 }
 
 export async function sendMessage(sessionId: string, content: string): Promise<string> {

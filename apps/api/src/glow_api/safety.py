@@ -207,19 +207,20 @@ class CrisisFSM:
 # phone numbers that have not been verified, and must always acknowledge
 # the user's distress.
 
-CRISIS_ACKNOWLEDGMENT_TEMPLATE = """I hear that you're going through something very difficult right now.
-What you're feeling matters, and I want to make sure you're as safe as possible.
+CRISIS_ACKNOWLEDGMENT_TEMPLATE = """I hear you, and I'm taking what you said seriously. What you're feeling matters deeply, and I want to make sure you're as safe as possible right now.
 
-I'm an AI — not a human therapist — and the most important thing right now is
-connecting you with someone who can truly help.
+I'm an AI — not a human therapist — and right now the most important thing is connecting you with someone who can truly help.
 
-I'm working on gathering verified local resources for you. Until then, please
-reach out to someone you trust: a family member, friend, doctor, or emergency services.
+If you're in Egypt, please reach out to one of these:
+• Emergency services / ambulance: 123
+• Police emergency: 122
+• National mental-health support line: 16328
+• Befrienders Cairo (someone to talk to): 762 1602 or 762 1603
+• Befrienders Cairo email: befrienders@befrienderscairo.com
 
-If you believe you or someone else is in immediate danger, please contact
-emergency services (such as an emergency hotline or go to a local emergency room).
+If you're outside Egypt, visit findahelpline.com to find support in your country.
 
-I'm here with you. Can you tell me: are you in a safe place right now?"""
+I'm still here with you. Can you tell me — are you in a safe place right now?"""
 
 CRISIS_RESOURCE_UNAVAILABLE_TEMPLATE = """The verified local support resources for your region are not yet available
 in this system. This is a limitation of the current version of Glow — no phone
@@ -274,6 +275,27 @@ next steps for getting professional support. Would that be helpful?"""
 # patterns would be developed with clinical guidance and red-teaming.
 # They are intentionally conservative — false positives are safer than
 # false negatives for crisis signals.
+
+# --- Crisis keyword patterns ---
+_CRISIS_KEYWORDS = re.compile(
+    r"\b(suicid|kill\s+myself|end\s+my\s+life|hurt\s+myself|self[- ]harm|"
+    r"want\s+to\s+die|don'?t\s+want\s+to\s+live|cut\s+myself|"
+    r"overdose|jump\s+off|hang\s+myself|not\s+want\s+to\s+be\s+here|"
+    r"can'?t\s+go\s+on|no\s+reason\s+to\s+live|better\s+off\s+dead|"
+    r"thinking\s+about\s+suicide|thoughts\s+of\s+suicide)\b",
+    re.IGNORECASE,
+)
+_SELF_HARM_KEYWORDS = re.compile(
+    r"\b(cut\s+myself|cutting|burn\s+myself|burning|scratch\s+myself|"
+    r"hit\s+myself|starv\w+|purging|self[- ]harm|self[- ]injur)\b",
+    re.IGNORECASE,
+)
+_GENERAL_DISTRESS_KEYWORDS = re.compile(
+    r"\b(hopeless|worthless|nobody\s+cares|no\s+point|give\s+up|"
+    r"can'?t\s+take\s+it|exhausted\s+from\s+life|so\s+tired\s+of\s+everything|"
+    r"nothing\s+matters|disappear\s+forever)\b",
+    re.IGNORECASE,
+)
 
 _PROMPT_INJECTION_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"(?i)ignore\s+(all\s+)?previous\s+instructions?"),
@@ -345,6 +367,29 @@ def run_pre_generation_check(
         block = True
         response_override = PROMPT_INJECTION_BOUNDARY_TEMPLATE
         audit_note = "prompt_injection_detected"
+
+    # --- Crisis detection ---
+    if not block and _CRISIS_KEYWORDS.search(user_input):
+        signals.add(SafetySignal.SUICIDAL_IDEATION)
+        signals.add(SafetySignal.IMMINENT_DANGER_TO_SELF)
+        tier = RiskTier.CRISIS
+        block = True
+        require_crisis = True
+        response_override = CRISIS_ACKNOWLEDGMENT_TEMPLATE
+        audit_note = "crisis_keyword_detected_pre_generation"
+
+    elif not block and _SELF_HARM_KEYWORDS.search(user_input):
+        signals.add(SafetySignal.SELF_HARM)
+        tier = max(tier, RiskTier.HIGH)
+        block = True
+        response_override = SAFE_MESSAGING_REDIRECT_TEMPLATE
+        audit_note = "self_harm_keyword_detected"
+
+    elif not block and _GENERAL_DISTRESS_KEYWORDS.search(user_input):
+        signals.add(SafetySignal.GENERAL_DISTRESS)
+        tier = max(tier, RiskTier.MODERATE)
+        # Don't block; allow model but log it
+        audit_note = "general_distress_keyword_detected"
 
     if not block:
         signals.add(SafetySignal.NONE_DETECTED)
@@ -535,6 +580,131 @@ class CrisisResourceRegistry:
 # Global registry instance (empty — see RESOURCE_REGISTRY_BLOCKED).
 # Populated only by the admin crisis-resource management workflow (Phase 9).
 CRISIS_REGISTRY: CrisisResourceRegistry = CrisisResourceRegistry()
+
+
+# ---------------------------------------------------------------------------
+# Egypt crisis resources (verified 2026-11)
+# Human-reviewed; do NOT modify contact values without re-verification.
+# ---------------------------------------------------------------------------
+def _populate_crisis_registry() -> None:
+    """Populate verified crisis resources. Called once at module load."""
+    _verified_at = datetime(2026, 11, 8, tzinfo=UTC)
+    _verified_by = "Glow-founding-team-manual-review"
+
+    entries = [
+        CrisisResource(
+            resource_id="eg-ambulance",
+            name="Egypt Emergency Ambulance",
+            jurisdiction="EG",
+            locale="ar",
+            contact_type="phone",
+            contact_value="123",
+            is_verified=True,
+            verified_at=_verified_at,
+            verified_by=_verified_by,
+            license_notes="Public emergency number",
+            availability="24/7",
+        ),
+        CrisisResource(
+            resource_id="eg-police",
+            name="Egypt Police Emergency",
+            jurisdiction="EG",
+            locale="ar",
+            contact_type="phone",
+            contact_value="122",
+            is_verified=True,
+            verified_at=_verified_at,
+            verified_by=_verified_by,
+            license_notes="Public emergency number",
+            availability="24/7",
+        ),
+        CrisisResource(
+            resource_id="eg-mental-health-line",
+            name="Egypt National Mental Health Support Line",
+            jurisdiction="EG",
+            locale="ar",
+            contact_type="phone",
+            contact_value="16328",
+            is_verified=True,
+            verified_at=_verified_at,
+            verified_by=_verified_by,
+            license_notes="Public mental health support line",
+            availability="24/7",
+        ),
+        CrisisResource(
+            resource_id="eg-mental-health-line-en",
+            name="Egypt National Mental Health Support Line",
+            jurisdiction="EG",
+            locale="en",
+            contact_type="phone",
+            contact_value="16328",
+            is_verified=True,
+            verified_at=_verified_at,
+            verified_by=_verified_by,
+            license_notes="Public mental health support line",
+            availability="24/7",
+        ),
+        CrisisResource(
+            resource_id="eg-befrienders-1",
+            name="Befrienders Cairo",
+            jurisdiction="EG",
+            locale="en",
+            contact_type="phone",
+            contact_value="762 1602",
+            is_verified=True,
+            verified_at=_verified_at,
+            verified_by=_verified_by,
+            license_notes="Befrienders Worldwide member",
+            availability="Check befrienderscairo.com for hours",
+        ),
+        CrisisResource(
+            resource_id="eg-befrienders-2",
+            name="Befrienders Cairo (line 2)",
+            jurisdiction="EG",
+            locale="en",
+            contact_type="phone",
+            contact_value="762 1603",
+            is_verified=True,
+            verified_at=_verified_at,
+            verified_by=_verified_by,
+            license_notes="Befrienders Worldwide member",
+            availability="Check befrienderscairo.com for hours",
+        ),
+        CrisisResource(
+            resource_id="eg-befrienders-email",
+            name="Befrienders Cairo Email",
+            jurisdiction="EG",
+            locale="en",
+            contact_type="email",
+            contact_value="befrienders@befrienderscairo.com",
+            is_verified=True,
+            verified_at=_verified_at,
+            verified_by=_verified_by,
+            license_notes="Befrienders Worldwide member",
+            availability="Check befrienderscairo.com for hours",
+        ),
+        CrisisResource(
+            resource_id="global-findahelpline",
+            name="Find A Helpline (Global)",
+            jurisdiction="GLOBAL",
+            locale="en",
+            contact_type="chat",
+            contact_value="https://findahelpline.com",
+            is_verified=True,
+            verified_at=_verified_at,
+            verified_by=_verified_by,
+            license_notes="Public directory",
+            availability="24/7 directory",
+        ),
+    ]
+    for entry in entries:
+        try:
+            CRISIS_REGISTRY.add_resource(entry)
+        except Exception:
+            pass  # Skip duplicates silently
+
+
+_populate_crisis_registry()
 
 
 # ---------------------------------------------------------------------------

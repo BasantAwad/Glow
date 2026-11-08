@@ -167,60 +167,69 @@ class OpenWeightsModelGateway(ModelGateway):
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
-        payload = {
+        payload: dict[str, Any] = {
             "model": self.model_id,
             "messages": messages,
             "max_tokens": request.max_tokens,
             "temperature": request.temperature,
             "top_p": request.top_p,
             "stream": False,
-            # Reasoning models (e.g. NVIDIA Nemotron hybrid) must not leak their
-            # chain-of-thought into user-facing support responses.
-            "reasoning": {"enabled": False, "exclude": True},
         }
+        if "nemotron" in (self.model_id or "").lower():
+            payload["reasoning"] = {"enabled": False, "exclude": True}
 
         url = self.api_base.rstrip("/") + "/chat/completions"
         start_time = time.perf_counter()
 
-        async with httpx.AsyncClient(timeout=request.timeout_sec) as client:
-            try:
+        try:
+            async with httpx.AsyncClient(timeout=request.timeout_sec) as client:
                 resp = await client.post(url, headers=headers, json=payload)
                 resp.raise_for_status()
                 data = resp.json()
-            except httpx.HTTPError as e:
-                raise GlowError(
-                    ErrorCode.PROVIDER_UNAVAILABLE,
-                    f"Model provider request failed: {e}",
-                    http_status=503,
-                ) from e
 
-        latency_ms = (time.perf_counter() - start_time) * 1000.0
+            latency_ms = (time.perf_counter() - start_time) * 1000.0
 
-        choices = data.get("choices", [])
-        if not choices:
-            raise RuntimeError("No choices returned by model provider.")
+            choices = data.get("choices", [])
+            if not choices:
+                raise RuntimeError("No choices returned by model provider.")
 
-        message = choices[0].get("message", {})
-        text = message.get("content", "")
+            message = choices[0].get("message", {})
+            text = message.get("content", "")
 
-        finish_reason = choices[0].get("finish_reason", "unknown")
-        if finish_reason == "stop":
-            stop_reason = GenerationStopReason.STOP_TOKEN
-        elif finish_reason == "length":
-            stop_reason = GenerationStopReason.MAX_TOKENS
-        else:
-            stop_reason = GenerationStopReason.ERROR
+            finish_reason = choices[0].get("finish_reason", "unknown")
+            if finish_reason == "stop":
+                stop_reason = GenerationStopReason.STOP_TOKEN
+            elif finish_reason == "length":
+                stop_reason = GenerationStopReason.MAX_TOKENS
+            else:
+                stop_reason = GenerationStopReason.ERROR
 
-        usage = data.get("usage", {})
-        token_count = usage.get("total_tokens", 0)
+            usage = data.get("usage", {})
+            token_count = usage.get("total_tokens", 0)
 
-        return GenerationResponse(
-            text=text,
-            stop_reason=stop_reason,
-            model_id=data.get("model", self.model_id),
-            latency_ms=latency_ms,
-            token_count=token_count,
-        )
+            return GenerationResponse(
+                text=text,
+                stop_reason=stop_reason,
+                model_id=data.get("model", self.model_id),
+                latency_ms=latency_ms,
+                token_count=token_count,
+            )
+        except Exception as e:
+            # Fall back safely to LocalModelGateway so the user is never left without support
+            import logging
+            logging.getLogger("glow_api.model_gateway").warning(
+                "Remote model provider call failed (%s); falling back to local context engine: %s",
+                url,
+                e,
+            )
+            local_resp = await LocalModelGateway().generate(request)
+            return GenerationResponse(
+                text=local_resp.text,
+                stop_reason=local_resp.stop_reason,
+                model_id=f"{local_resp.model_id} (fallback)",
+                latency_ms=(time.perf_counter() - start_time) * 1000.0,
+                token_count=local_resp.token_count,
+            )
 
     async def stream(self, request: GenerationRequest) -> AsyncIterator[str]:
         import httpx

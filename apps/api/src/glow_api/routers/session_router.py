@@ -22,21 +22,20 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
 
-from glow_api.consent import ConsentRecord, ConsentPurpose, make_initial_consent
+from glow_api.consent import ConsentPurpose, ConsentRecord
 from glow_api.database import db_manager, get_db_session
 from glow_api.dependencies import (
     get_auth_provider,
     get_current_consent,
     get_current_user,
 )
-from glow_api.errors import AuthenticationError, ProviderNotConfiguredError, GlowError
+from glow_api.errors import ProviderNotConfiguredError
 from glow_api.model_gateway import get_model_gateway
 from glow_api.orchestrator import SessionOrchestrator
 from glow_api.policy import ConversationPolicyEngine
@@ -54,9 +53,17 @@ router = APIRouter(prefix="/sessions", tags=["sessions"])
 # ---------------------------------------------------------------------------
 
 
+class SessionStartRequest(BaseModel):
+    """Optional payload for starting a session."""
+    mode: str = "open"
+    input_modality: str = "text"  # 'text' | 'voice'
+
+
 class SessionStartResponse(BaseModel):
     session_id: str
     state: str
+    mode: str = "open"
+    input_modality: str = "text"
 
 
 class MessageRequest(BaseModel):
@@ -95,15 +102,33 @@ async def start_session(
     user: Annotated[UserAccount, Depends(get_current_user)],
     consent: Annotated[ConsentRecord, Depends(get_current_consent)],
     orchestrator: Annotated[SessionOrchestrator, Depends(get_orchestrator)],
+    body: SessionStartRequest | None = None,
 ) -> SessionStartResponse:
     """Start a new session.
 
     Requires:
     - Valid Glow-signed JWT Bearer token (via Authorization header)
     - service_use consent on file
+
+    Optional body:
+    - mode: 'open' | 'listen_only' | 'guided' (default: 'open')
+    - input_modality: 'text' | 'voice' (default: 'text')
     """
-    result = await orchestrator.start_session(user, consent)
-    return SessionStartResponse(**result)
+    _body = body or SessionStartRequest()
+    allowed_modes = {"open", "listen_only", "guided", "open_conversation", "guided_questions"}
+    mode = _body.mode if _body.mode in allowed_modes else "open"
+    if mode == "open_conversation":
+        mode = "open"
+    elif mode == "guided_questions":
+        mode = "guided"
+
+    result = await orchestrator.start_session(user, consent, mode=mode)
+    return SessionStartResponse(
+        session_id=result["session_id"],
+        state=result["state"],
+        mode=mode,
+        input_modality=_body.input_modality,
+    )
 
 
 @router.post("/{session_id}/message", response_model=MessageResponse)
@@ -177,12 +202,12 @@ async def _authenticate_websocket(
     try:
         async with db_manager.session() as db:
             from sqlalchemy import select
-            from glow_api.models import (
-                UserAccountModel,
-                UserPreferencesModel,
-                ConsentRecordModel,
-            )
             from sqlalchemy.orm import selectinload
+
+            from glow_api.models import (
+                ConsentRecordModel,
+                UserAccountModel,
+            )
 
             user_row = await db.execute(
                 select(UserAccountModel)
@@ -194,7 +219,14 @@ async def _authenticate_websocket(
                 await websocket.close(code=4403, reason="user_not_found")
                 return None
 
-            from glow_api.user import AccessibilityFlag, UserPreferences, UserLocale, SessionMode, AvatarDisclosurePreference, InputModality
+            from glow_api.user import (
+                AccessibilityFlag,
+                AvatarDisclosurePreference,
+                InputModality,
+                SessionMode,
+                UserLocale,
+                UserPreferences,
+            )
             prefs_model = user_model.preferences
             if prefs_model is not None:
                 prefs = UserPreferences(

@@ -6,17 +6,19 @@ const STATUS = ["idle", "listening", "speaking", "processing"] as const;
 type VoiceStatusType = typeof STATUS[number];
 
 export function VoiceIndicator({ state }: { state: { status: VoiceStatusType } }) {
-  const [visible, setVisible] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
     if (state.status !== "idle") {
-      setVisible(true);
-      const timer = setTimeout(() => setVisible(false), 4000);
-      return () => clearTimeout(timer);
+      const timer = setTimeout(() => setDismissed(true), 4000);
+      return () => {
+        clearTimeout(timer);
+        setDismissed(false);
+      };
     }
   }, [state.status]);
 
-  if (!visible || state.status === "idle") return null;
+  if (state.status === "idle" || dismissed) return null;
 
   const statusLabels: Record<VoiceStatusType, string> = {
     listening: "Listening...",

@@ -85,7 +85,10 @@ interface AvatarPresenterProps {
 function AvatarPresenter({ phase: _phase, speaking, onLoaded, onError }: AvatarPresenterProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const speakingRef = useRef(speaking);
-  speakingRef.current = speaking;
+
+  useEffect(() => {
+    speakingRef.current = speaking;
+  }, [speaking]);
 
   useEffect(() => {
     let disposed = false;
@@ -270,10 +273,6 @@ export default function PresencePage() {
 
   useEffect(() => () => cleanupRecording(), [cleanupRecording]);
 
-  useEffect(() => {
-    setLoadingAvatar(mode === "avatar");
-  }, [mode]);
-
   const startListening = useCallback(async () => {
     setError(null);
     setPhase("connecting");
@@ -404,7 +403,14 @@ export default function PresencePage() {
         <p className="mt-2 text-muted-foreground text-center text-sm">Talk naturally. Captions always on.</p>
       </div>
 
-      <ModeSelector mode={mode} onChange={setMode} disabled={isActive} />
+      <ModeSelector
+        mode={mode}
+        onChange={(m) => {
+          setMode(m);
+          setLoadingAvatar(m === "avatar");
+        }}
+        disabled={isActive}
+      />
 
       <div className="glass rounded-3xl overflow-hidden w-full max-w-sm aspect-[3/4] relative mb-2">
         {mode === "avatar" && (
