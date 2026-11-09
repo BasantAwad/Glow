@@ -104,92 +104,101 @@ _FALLBACK_RESPONSES = [
 _CONTEXT_RESPONSES: list[tuple[list[str], list[str]]] = [
     # anxiety / stress
     (
-        ["anxious", "anxiety", "nervous", "worry", "worried", "panic", "stressed", "stress", "overwhelm", "overwhelmed", "dread"],
+        ["anxious", "anxiety", "nervous", "worry", "worried", "panic", "stressed", "stress", "dread", "on edge", "afraid", "scared", "fear", "terrified", "fearful"],
         [
-            "It sounds like {topic} has been really present for you lately. That can feel so exhausting — like your mind won't give you a break. I'm wondering, when that anxious feeling shows up, is there a particular thought or situation that seems to come with it?",
-            "I hear you. Anxiety can be so heavy, and it makes complete sense that you'd want to understand it better. You don't have to have it all figured out. What's it been like for you — has this been building for a while, or did something specific happen?",
-            "That sounds really tough. Anxiety has a way of making everything feel bigger and more uncertain than it already is. I'm curious — when you notice that feeling, where do you feel it in your body? Sometimes our bodies hold on to things before our minds catch up.",
+            "It sounds like {topic} has been really present for you lately. That can feel exhausting, like your mind won't give you a break. When it shows up, is there a particular thought or situation that comes with it?",
+            "I hear how heavy that feels. Anxiety can make everything seem bigger and more uncertain. Has this been building for a while, or did something specific bring it up?",
+            "That sounds tough. Sometimes it helps to notice where the feeling sits in your body or what thought arrives first. What has it been like for you today?",
         ],
     ),
-    # depression / low mood / sadness
+    # low mood / sadness / loneliness
     (
-        ["depressed", "depression", "sad", "sadness", "down", "low", "hopeless", "hopelessness", "empty", "numb", "tears", "crying", "cry", "grief", "lost", "lonely", "alone", "isolated"],
+        ["depressed", "depression", "sad", "sadness", "down", "low", "hopeless", "hopelessness", "empty", "numb", "tears", "crying", "cry", "grief", "lost", "lonely", "alone", "isolated", "disconnected"],
         [
-            "Thank you for trusting me with that. Feeling this low can be so isolating, and it takes real courage to name it out loud. I'm here with you. I'm wondering — has this been a recent thing, or has it been sitting with you for longer than that?",
-            "I can hear how much pain you're carrying. That sounds incredibly heavy. You don't have to hold it all by yourself — not in this conversation anyway. What's the hardest part of this for you right now?",
-            "It sounds like you've been carrying so much. Sadness like that can be exhausting. I want you to know I'm listening, and there's no rush to have the right words. What feels like the most important thing to say right now?",
+            "Thank you for trusting me with that. {topic} can feel isolating, and it takes courage to name it. Has this been recent, or has it been with you for a while?",
+            "I can hear how much you're carrying. You don't have to hold it all by yourself in this conversation. What feels hardest about it right now?",
+            "It makes sense that this would feel heavy. When {topic} shows up, what moments or situations make it stand out most?",
         ],
     ),
-    # work / job / career stress
+    # hopelessness / fear that things will never change
     (
-        ["work", "job", "boss", "colleague", "coworker", "colleagues", "team", "career", "promotion", "interview", "layoff", "fired", "quota", "deadline", "performance", "criticism", "criticize", "criticized", "micromanage", "burnout", "overtime", "meeting", "colleagues"],
+        ["never feel better", "nothing will change", "what's the point", "whats the point", "no hope", "give up", "can't see a future", "cant see a future", "will it ever get better", "nothing helps"],
         [
-            "Work can take up so much of our mental space, and it's completely understandable that it would weigh on you — especially when it touches things like your sense of worth or your daily stress levels. I'm curious, what's been the hardest part of this work situation for you?",
-            "It sounds like work has been really wearing you down. That's so common, and it's also so hard — because it's not just the workload, it's how it makes you feel about yourself. What's been going on that feels most difficult?",
-            "I hear you. When work starts to feel like it's draining more than just your time — when it starts touching your sense of who you are — that's a sign it's worth paying attention to. Has this been building over time, or did something specific shift?",
+            "That fear makes sense when you've been carrying this for a while. Feeling like nothing will change is exhausting, and it doesn't mean you're doing anything wrong. What would it be like to take this one day at a time right now?",
+            "I'm glad you said that out loud. When hope feels far away, it's hard to imagine things shifting. We don't have to solve the future today. What would make the next hour a little more bearable?",
+            "That sounds frightening, and I'm here with you. You don't have to believe things will improve right now. What's keeping you going today, even a little?",
         ],
     ),
-    # relationships / family / friends / breakup / loneliness
+    # study / academic pressure / focus / procrastination / guilt
     (
-        ["relationship", "partner", "boyfriend", "girlfriend", "husband", "wife", "spouse", "breakup", "divorce", "separation", "family", "mother", "father", "mom", "dad", "parent", "parents", "sibling", "brother", "sister", "friend", "friends", "friendship", "lonely", "alone", "argue", "argument", "fight", "fighting", "conflict", "trust", "cheat", "cheating", "affair"],
+        ["university", "college", "school", "class", "classes", "study", "studying", "exam", "exams", "assignment", "assignments", "homework", "deadline", "deadlines", "focus", "concentrate", "concentration", "procrastinate", "procrastinating", "procrastination", "guilt", "guilty", "behind", "grades", "grade", "lecture", "professor", "semester"],
         [
-            "Relationships can be some of the most meaningful — and some of the hardest — parts of our lives. It sounds like this is weighing on you. I'm wondering, what feels like the core of it for you right now?",
-            "Thank you for sharing that. When relationships start to feel uncertain or painful, it can shake a lot more than just the relationship itself. I'm here. What's been the hardest moment in all of this?",
-            "That sounds really hard. Relationships ask a lot of us, and when they're not feeling safe or connected, it can bring up so much. There's no 'right' way to feel about it. What's been the most difficult part for you?",
+            "That sounds really draining. When {topic} piles up, it can make focus harder and guilt louder, even when you're trying your best. What's the one thing that feels most pressing right now?",
+            "I hear you. University pressure and trouble focusing can feed into each other, especially when procrastination starts to feel heavy. What's been getting in the way most lately?",
+            "It makes sense that you'd feel stuck with that. Instead of looking at everything at once, is there a small piece of it that feels even slightly doable today?",
         ],
     ),
-    # sleep / insomnia / fatigue / energy
+    # work / career stress
     (
-        ["sleep", "insomnia", "can't sleep", "cannot sleep", "awake", "wake", "waking", "tired", "fatigue", "exhausted", "exhaustion", "energy", "no energy", "rest", "nightmare", "nightmares", "dream"],
+        ["work", "job", "boss", "colleague", "coworker", "coworkers", "team", "career", "promotion", "interview", "layoff", "fired", "burnout", "overtime", "meeting", "performance", "criticism", "criticize", "criticized", "micromanage"],
         [
-            "Sleep and energy are so tied to everything else — mood, focus, how we feel about ourselves. When they go off, it can make everything else feel harder. I'm curious, how long has this been going on, and what does a typical night look like for you?",
-            "I hear you. When you can't get the rest you need, it affects everything — and it's frustratingly hard to just 'fix'. There's no quick answer, but I'm here to listen. What's been going on at night — is it trouble falling asleep, staying asleep, or waking up too early?",
-            "That sounds really draining. Not getting enough rest can make everything else feel heavier. I wonder — has this been going on for a while, and is there anything that seems to make it better or worse, even a little?",
+            "Work can take up a lot of mental space, especially when it affects your confidence or stress. What's been the hardest part of this situation for you?",
+            "That sounds wearing. It's not just the tasks — it's also how it makes you feel day to day. Has this been building over time, or did something specific happen?",
+            "I hear how much this is weighing on you. When work feels difficult, it can follow you home in your thoughts. What part of it feels most important to talk through?",
         ],
     ),
-    # self-worth / confidence / identity
+    # relationships / family / friends
     (
-        ["worth", "worthless", "not good enough", "not enough", "enough", "confidence", "confident", "self-esteem", "self worth", "imposter", "imposter syndrome", "fail", "failure", "failing", "can't do", "can't handle", "can't cope", "can\'t cope", "weak", "weakness"],
+        ["relationship", "partner", "boyfriend", "girlfriend", "husband", "wife", "spouse", "breakup", "divorce", "separation", "family", "mother", "father", "mom", "dad", "parent", "parents", "sibling", "brother", "sister", "friend", "friends", "friendship", "argue", "argument", "fight", "fighting", "conflict", "trust", "cheat", "cheating"],
         [
-            "It takes real honesty to name those feelings — the sense that you're not enough, or that you can't handle things. I want you to know that I hear you, and I'm not here to tell you what to think about yourself. I'm just here to listen. Would you be willing to tell me a little more about where that feeling comes up for you?",
-            "That sounds incredibly painful — feeling like you're not enough, or like you're failing, is one of the heaviest things a person can carry. You don't have to prove anything to me. I'm just listening. What's been going on that's brought this up for you?",
-            "I hear how much pain there is in that feeling of not being enough. So many people carry that, even when it looks like they're doing fine from the outside. You're not alone in that. Would you say this is more about a specific situation, or has it been a longer-standing thing?",
+            "Relationships can be meaningful and really hard at the same time. It sounds like this is weighing on you. What feels like the core of it right now?",
+            "Thank you for sharing that. When connection feels uncertain or painful, it can affect a lot. What's been the hardest moment in this for you?",
+            "That sounds difficult. There's no single right way to feel about it. What do you wish the other person understood, or what do you need right now?",
         ],
     ),
-    # trauma / past / abuse / haunting
+    # sleep / fatigue / energy
     (
-        ["trauma", "traumatic", "abuse", "abusive", "assault", "raped", "rape", "molest", "molested", "past", "haunting", "flashback", "flashbacks", "trigger", "triggered", "ptsd", "post-traumatic", "harassment", "harassed", "unsafe", "unsafe", "fear", "scared", "terrified", "helpless", "hopeless"],
+        ["sleep", "insomnia", "can't sleep", "cannot sleep", "awake", "wake", "waking", "tired", "fatigue", "exhausted", "exhaustion", "energy", "no energy", "rest", "nightmare", "nightmares"],
         [
-            "Thank you for trusting me with something so personal. What you went through sounds incredibly hard, and I want you to know I'm here to listen — without any pressure to explain more than you want to. You don't have to carry this alone in this conversation. What feels like the most important thing to say right now?",
-            "I can hear how much this still affects you. When something that painful happened, it doesn't just stay in the past — it can echo into everything. I'm here with you, and there's no rush. What's been coming up most for you lately?",
-            "That sounds so heavy, and I'm really glad you told me. Trauma has a way of making the present feel like the past sometimes. I want you to know that however you're feeling right now makes sense. Would you like to tell me a bit more about what's been hardest recently?",
+            "Sleep and energy affect everything else. When rest is off, even small things can feel harder. How long has this been going on, and what do your nights look like?",
+            "I hear you. Not getting the rest you need can be exhausting in every way. Is it more trouble falling asleep, staying asleep, or waking up tired?",
+            "That sounds draining. Has anything made it a little better or worse, even briefly? Sometimes small patterns are worth noticing.",
         ],
     ),
-    # physical health / pain / symptoms
+    # self-worth / confidence / guilt
     (
-        ["pain", "headache", "migraine", "stomach", "nausea", "sick", "illness", "disease", "chronic", "symptom", "symptoms", "diagnosis", "diagnosed", "doctor", "hospital", "surgery", "medication", "medicine", "pill", "appetite", "weight", "gain", "lose weight", "loss"],
+        ["worth", "worthless", "not good enough", "not enough", "confidence", "confident", "self-esteem", "self worth", "imposter", "imposter syndrome", "fail", "failure", "failing", "can't do", "can't handle", "can't cope", "can't cope", "weak", "weakness", "ashamed", "shame"],
         [
-            "I'm sorry you're dealing with this. Physical symptoms can take such a toll — not just on the body, but on everything else too. I want to be upfront that I'm not a doctor and can't give medical advice, but I am here to listen and help you think through what this has been like for you. Would you like to tell me more about what's been going on?",
-            "It sounds like this has been really hard on you — physically and probably emotionally too. I'm not able to give medical advice, but I can listen and help you sort through what this has meant for your day-to-day life. How has this been affecting you beyond just the physical symptoms?",
-            "That sounds exhausting. Dealing with physical symptoms on top of everything else is a lot. I want to be honest — I can't diagnose or prescribe, but I can sit with you in this and help you think it through. What's been the hardest part of this for you?",
+            "It takes honesty to name that feeling. You don't have to prove anything here — I'm listening. Where does that feeling show up most for you?",
+            "That sounds painful. Feeling not enough or like you're failing can be incredibly heavy. What's been happening that's brought this up?",
+            "I hear how hard that is to carry. Would you say this is tied to a specific situation right now, or has it been around longer?",
         ],
     ),
-    # eating / body image
+    # trauma / fear / safety feelings (handled carefully; crisis routing is separate)
     (
-        ["eating", "eat", "food", "binge", "bingeing", "over eat", "overeat", "starve", "restrict", "diet", "body", "body image", "weight", "fat", "thin", "skinny", "bulimia", "anorexia", "body dysmorphia", "mirror", "appearance", "look"],
+        ["trauma", "traumatic", "abuse", "abusive", "assault", "harassment", "harassed", "past", "flashback", "flashbacks", "trigger", "triggered", "ptsd", "post-traumatic", "unsafe", "helpless"],
         [
-            "Thank you for opening up about this. Our relationship with food and our bodies can be so complicated, and it can feel incredibly personal and hard to talk about. I'm here to listen without judgment. What's been going on for you around this?",
-            "I hear you. This can be such a difficult thing to carry, especially when it feels like it's wrapped up with how you see yourself. I want to be honest — I'm not here to give advice about eating or weight, but I am here to listen and understand what this has been like for you. Would you be willing to share a bit more?",
-            "It sounds like this is really painful for you. Our relationship with food and our bodies can touch so much of how we feel about ourselves. You don't have to figure this out right now. What feels like the most important thing to say?",
+            "Thank you for trusting me with something personal. I'm here to listen without pressure to explain more than you want. What feels most important to say right now?",
+            "I can hear how much this affects you. Painful experiences can echo into the present. What's been coming up most lately?",
+            "That sounds heavy. However you're feeling makes sense. Would you like to share a bit more about what's been hardest recently?",
         ],
     ),
-    # general / open-ended / "I don't know"
+    # physical health (non-medical)
     (
-        ["don't know", "dont know", "not sure", "unsure", "confused", "confusing", "overwhelm", "overwhelmed", "stuck", "lost", "empty", "nothing", "everything", "all", "just", "tired", "help", "need help", "what do i do", "what should i do", "advice", "how do i", "how can i", "i need"],
+        ["pain", "headache", "migraine", "stomach", "nausea", "sick", "illness", "disease", "chronic", "symptom", "symptoms", "doctor", "hospital", "medication", "medicine", "appetite", "weight"],
         [
-            "It's okay not to have it all figured out — honestly, most of the time none of us do. I'm here to listen and help you untangle things at your own pace. What feels like the most pressing thing on your mind right now?",
-            "That's a completely fair place to be — feeling unsure or stuck is its own kind of heavy. You don't need to know exactly what's wrong before you reach out. I'm here. What's been feeling the most difficult lately?",
-            "I appreciate you saying that. Sometimes the hardest part is just not knowing where to start. We don't have to start anywhere in particular. What's something — anything — that's been feeling heavy or hard lately? Even something small counts.",
+            "I'm sorry you're dealing with this. I'm not a doctor and can't give medical advice, but I can listen to how it's affecting you. What has this been like day to day?",
+            "That sounds exhausting. Physical symptoms can affect mood and stress too. What feels hardest about it right now, beyond the symptoms themselves?",
+            "I hear you. I can't diagnose or treat medical issues, but I can sit with you in this. Would talking through how it's impacting you help?",
+        ],
+    ),
+    # starting / uncertainty (kept low-priority; avoid dominating)
+    (
+        ["don't know", "dont know", "not sure", "unsure", "confused", "confusing", "overwhelm", "overwhelmed", "stuck", "where to start", "no idea"],
+        [
+            "It's okay not to have it all figured out. We can take this slowly. What feels most present for you right now, even if it's hard to name?",
+            "Feeling unsure or stuck is its own kind of heavy. You don't need the perfect words. What's been weighing on you most lately?",
+            "We don't have to solve everything at once. Is there one part of this that feels a little easier to talk about first?",
         ],
     ),
 ]
@@ -224,139 +233,279 @@ def _normalise(text: str) -> str:
     return re.sub(r"\s+", " ", text.lower().strip())
 
 
-def _extract_topics(message: str, history: tuple[tuple[str, str], ...]) -> list[str]:
-    """
-    Extract topic keywords from the current message and recent history.
+_GENERIC_TOPIC_WORDS = {
+    "help", "need help", "what do i do", "what should i do", "advice",
+    "how do i", "how can i", "i need", "just", "all", "everything", "nothing",
+    "try", "trying", "today", "right now", "where to start", "no idea",
+    "don't know", "dont know", "not sure", "unsure", "confused", "confusing",
+    "overwhelm", "overwhelmed", "stuck",
+}
 
-    Looks at the last 4 user turns (including the current one) and
-    returns the union of keyword hits, ordered by frequency then by
-    template priority.
+# Keep the last template (starting/uncertainty) as a fallback, not a primary topic.
+_FALLBACK_CLUSTER_INDEX = len(_CONTEXT_RESPONSES) - 1
+
+
+def _extract_topics(message: str, history: tuple[tuple[str, str], ...]) -> tuple[list[str], list[str]]:
+    """Extract topic keywords, returning (current_message_keywords, all_keywords).
+
+    Current-message hits are weighted more heavily so replies follow what the
+    user said now rather than repeating earlier vague context.
     """
-    # Gather text from current message + last 4 user turns in history
-    texts: list[str] = []
-    # Current message first
-    texts.append(_normalise(message))
-    # Walk history backwards, take last 4 user messages
-    user_turns: list[str] = []
+    from collections import Counter
+
+    current = _normalise(message)
+    user_turns: list[str] = [current]
     for role, text in reversed(history):
         if role == "user":
             user_turns.append(_normalise(text))
         if len(user_turns) >= 4:
             break
-    texts.extend(user_turns)
 
-    # Count keyword hits per topic cluster
-    from collections import Counter
-    hits: Counter = Counter()
-    for text in texts:
+    current_hits: Counter = Counter()
+    all_hits: Counter = Counter()
+    for idx, text in enumerate(user_turns):
+        weight = 5 if idx == 0 else 1
         for keywords, _ in _CONTEXT_RESPONSES:
             for kw in keywords:
                 if kw in text:
-                    hits[kw] += 1
+                    all_hits[kw] += weight
+                    if idx == 0:
+                        current_hits[kw] += 5
 
-    # Order: highest frequency first, then by order of appearance in templates
-    ordered: list[str] = sorted(hits.keys(), key=lambda k: (-hits[k], k))
-    return ordered
+    def order(counter: Counter) -> list[str]:
+        return sorted(
+            counter.keys(),
+            key=lambda k: (1 if k in _GENERIC_TOPIC_WORDS else 0, -counter[k], -len(k), k),
+        )
+
+    return order(current_hits), order(all_hits)
 
 
-def _resolve_topic(keywords: list[str]) -> tuple[list[str], list[str]] | None:
+def _resolve_topic(current_keywords: list[str], all_keywords: list[str]) -> tuple[list[str], list[str]] | None:
+    """Find the best-matching context template.
+
+    Prefers specific matches from the current message. The generic uncertainty
+    cluster is only used when no specific cluster matches.
     """
-    Given extracted keywords, find the best-matching context template.
-
-    Returns the (keywords, responses) pair for the best match, or None
-    if nothing matches.
-    """
-    if not keywords:
+    if not current_keywords and not all_keywords:
         return None
 
-    # Score each template by how many of its keywords appear in the
-    # extracted keyword set.
-    best: tuple[int, int, list[str], list[str]] = (-1, 0, [], [])  # score, -priority, keywords, responses
+    def score_cluster(keywords: list[str], template_keywords: list[str]) -> int:
+        # Multi-word phrases ("never feel better") are more specific than single
+        # words ("scared"), so weight them by length. Without this, a broad
+        # emotion word can outrank the actual concern the person named.
+        return sum(
+            (2 if kw not in _GENERIC_TOPIC_WORDS else 1) * max(1, len(kw.split()))
+            for kw in template_keywords
+            if kw in keywords
+        )
+
+    best: tuple[int, int, int, list[str], list[str]] = (-1, 0, 0, [], [])
     for idx, (template_keywords, responses) in enumerate(_CONTEXT_RESPONSES):
-        score = sum(1 for kw in template_keywords if kw in keywords)
-        if score > best[0] or (score == best[0] and idx < best[1]):
-            best = (score, idx, template_keywords, responses)
+        current_score = score_cluster(current_keywords, template_keywords)
+        history_score = score_cluster(all_keywords, template_keywords)
+        is_fallback = idx == _FALLBACK_CLUSTER_INDEX
+        # Strongly prefer what the user is saying now; history is context only.
+        if is_fallback:
+            combined = current_score * 2 + min(history_score, 2)
+            specificity = 0
+        else:
+            combined = current_score * 10 + min(history_score, 4)
+            specificity = 1 if current_score > 0 else 0
+        if combined <= 0:
+            continue
+        candidate = (combined, specificity, -idx, template_keywords, responses)
+        if candidate > best:
+            best = candidate
 
     if best[0] <= 0:
         return None
-    return (best[2], best[3])
+    # If nothing specific was in the current message but history has a strong
+    # specific topic, allow that specific topic over the fallback cluster.
+    if best[3] == _CONTEXT_RESPONSES[_FALLBACK_CLUSTER_INDEX][0]:
+        for idx, (template_keywords, responses) in enumerate(_CONTEXT_RESPONSES[:_FALLBACK_CLUSTER_INDEX]):
+            if score_cluster(all_keywords, template_keywords) >= 3:
+                return (template_keywords, responses)
+    return (best[3], best[4])
 
 
-def _build_reply(
-    message: str,
-    history: tuple[tuple[str, str], ...],
-) -> str:
-    """
-    Build a context-aware reply for the given message and conversation
-    history.  Always returns a non-empty string.
-    """
-    keywords = _extract_topics(message, history)
-    resolved = _resolve_topic(keywords)
+_TOPIC_LABELS = {
+    "anxious": "anxiety", "anxiety": "anxiety", "nervous": "anxiety",
+    "worry": "worry", "worried": "worry", "panic": "panic",
+    "stressed": "stress", "stress": "stress", "overwhelm": "feeling overwhelmed",
+    "overwhelmed": "feeling overwhelmed", "depressed": "low mood",
+    "depression": "low mood", "sad": "sadness", "sadness": "sadness",
+    "hopeless": "hopelessness", "hopelessness": "hopelessness",
+    "lonely": "loneliness", "alone": "being alone", "isolated": "feeling isolated",
+    "sleep": "sleep", "insomnia": "sleep", "can't sleep": "sleep",
+    "cannot sleep": "sleep", "tired": "feeling tired", "exhausted": "exhaustion",
+    "work": "work stress", "job": "work stress", "boss": "work stress",
+    "meeting": "work stress", "university": "university pressure",
+    "college": "college pressure", "study": "studying", "studying": "studying",
+    "exam": "exams", "exams": "exams", "assignment": "assignments",
+    "focus": "trouble focusing", "concentrate": "trouble concentrating",
+    "procrastinate": "procrastination", "procrastinating": "procrastination",
+    "procrastination": "procrastination", "guilt": "guilt", "guilty": "guilt",
+    "relationship": "relationship stress", "family": "family stress", "pain": "pain",
+}
 
-    if resolved is None:
-        # No topic match — use a generic empathic opener that still
-        # reflects the presence of conversation history.
-        recent_user_messages = [
-            t for r, t in history if r == "user"
-        ][-3:]
-        if recent_user_messages:
-            last = recent_user_messages[-1]
-            # Pick the longest recent user message fragment (at least 12 chars)
-            fragment = last[:80]
-            if len(fragment) < 12:
-                fragment = last
-            return (
-                f"I'm hearing you, and I want to give this the attention it deserves. "
-                f"You mentioned \"{fragment}\" — and I'm curious, what's been the hardest part "
-                f"of that for you lately? There's no rush to have it all figured out."
+
+def _wants_small_step(message: str) -> bool:
+    text = _normalise(message)
+    cues = [
+        "one small thing", "small thing", "small step", "something manageable",
+        "what can i try", "what could i try", "what should i try", "suggestion",
+        "before the next", "in the moment", "practical", "tip",
+        "plan", "schedule", "routine", "tomorrow", "next step",
+    ]
+    return any(cue in text for cue in cues)
+
+
+def _wants_plan(message: str) -> bool:
+    text = _normalise(message)
+    return any(
+        cue in text
+        for cue in ["plan", "schedule", "routine", "tomorrow", "organise my day", "organize my day"]
+    )
+
+
+def _is_gratitude_close(message: str) -> bool:
+    text = _normalise(message)
+    return any(
+        cue in text
+        for cue in [
+            "thanks for listening", "thank you for listening", "feel lighter",
+            "feels lighter", "that helps", "thanks",
+        ]
+    )
+
+
+def _choose_non_repeating(candidates: list[str], history: tuple[tuple[str, str], ...], seed: str) -> str:
+    recent = [_normalise(t)[:180] for r, t in history if r == "assistant"][-4:]
+    for i in range(len(candidates)):
+        idx = (int(hashlib.md5(f"{seed}-{i}".encode()).hexdigest(), 16)) % len(candidates)
+        text = candidates[idx]
+        norm = _normalise(text)[:180]
+        if norm and all(norm != r for r in recent):
+            return text
+    return candidates[int(hashlib.md5(seed.encode()).hexdigest(), 16) % len(candidates)]
+
+
+def _build_reply(message: str, history: tuple[tuple[str, str], ...]) -> str:
+    """Build a context-aware reply. Always returns a non-empty, safe string."""
+    msg_norm = _normalise(message)
+    history_text = " ".join(_normalise(t) for r, t in history if r == "user")
+    combined = f"{msg_norm} {history_text}"
+    recent_assistant = [_normalise(t) for r, t in history if r == "assistant"][-3:]
+
+    if _is_gratitude_close(message):
+        return _scrub(
+            "I'm really glad it felt a little lighter to say that out loud. "
+            "You don't have to carry it all at once. If you want, we can keep going, "
+            "or you can take a pause here and come back when you're ready."
+        )
+
+    if _wants_plan(message):
+        if any(k in combined for k in ["university", "exam", "study", "assignment", "coursework", "procrastinat", "focus", "deadline"]):
+            reply = (
+                "Let's keep tomorrow light enough that it doesn't become another thing to fail at. "
+                "Pick one piece of coursework you can start in ten minutes, put a short screen-free break after it, and leave the rest for later. "
+                "One small start still counts as progress. Which piece feels most realistic to begin with?"
+            )
+        elif any(k in combined for k in ["work", "job", "boss", "meeting", "presentation"]):
+            reply = (
+                "For tomorrow, try choosing one task that actually matters, one short break you protect, and a clear stopping point. "
+                "That's enough to give the day some shape without turning it into a test. What would make the morning feel less heavy?"
             )
         else:
-            return _pick_fallback()
+            reply = (
+                "Let's keep it small. Tomorrow could have one gentle thing for your body, like a glass of water or a short walk, one small task you can finish, and one moment of connection with someone safe. "
+                "Nothing needs to be perfect. Which part would feel easiest to hold on to?"
+            )
+        return _scrub(reply)
 
-    topic_keywords, responses = resolved
+    if _wants_small_step(message):
+        if any(k in combined for k in ["meeting", "work", "boss", "criticiz", "presentation", "university", "exam", "study", "assignment", "procrastinat", "focus"]):
+            reply = (
+                "One small thing you could try is to pick a single next step that takes 5–10 minutes — for example, open the material and do just the first small part. "
+                "You don't have to solve everything at once. What feels small enough to start with?"
+            )
+        elif any(k in combined for k in ["sleep", "awake", "night", "insomnia"]):
+            reply = (
+                "One small thing tonight could be a gentle wind-down: put your phone down for a few minutes and try a slow exhale longer than your inhale. "
+                "If sleep doesn't come, resting without forcing it still counts. Would you want something even simpler?"
+            )
+        elif any(k in combined for k in ["anxious", "anxiety", "panic", "worry", "stressed", "overwhelm"]):
+            reply = (
+                "One small thing you could try is to name what you're feeling, take one slow breath, and choose just the next manageable step. "
+                "Keeping it small is enough. What part feels most manageable right now?"
+            )
+        elif any(k in combined for k in ["lonely", "alone", "friend", "people"]):
+            reply = (
+                "One small thing could be a low-pressure connection: send a short message to someone you trust, or spend a few minutes somewhere that feels comfortable. "
+                "It doesn't have to be a big conversation. What feels possible today?"
+            )
+        else:
+            reply = (
+                "One small thing could be the next manageable step, not the whole solution — a short pause, a glass of water, or writing one sentence about what's hardest. "
+                "What feels small enough to try?"
+            )
+        return _scrub(reply)
 
-    # Choose a topic word for the {topic} placeholder.  Prefer the
-    # keyword that appeared most frequently in the extracted set.
-    from collections import Counter
-    counts = Counter(keywords)
-    topic_word = counts.most_common(1)[0][0] if counts else topic_keywords[0]
+    # Short greetings / check-ins
+    if len(msg_norm.split()) <= 4 and any(g in msg_norm for g in ["hi", "hello", "hey", "good morning", "good evening", "good afternoon"]):
+        return _scrub("Hi — I'm here with you. What's been on your mind lately, or what would feel helpful to talk about?")
 
-    # Pick a response by hashing the session + turn count so we vary
-    # responses across turns but stay deterministic within a turn.
+    current_keywords, all_keywords = _extract_topics(message, history)
+    resolved = _resolve_topic(current_keywords, all_keywords)
+
+    if resolved is None:
+        fragment = message.strip()[:140]
+        return _scrub(
+            f"I'm here with you. What you shared sounds important, and it makes sense that it's taking up space. "
+            f"Can you tell me a bit more about what feels hardest about it right now?"
+        )
+
+    _, responses = resolved
+    # Pick topic from current message first.
+    topic_word = "what you're carrying"
+    for source in (current_keywords, all_keywords):
+        for k in source:
+            if k not in _GENERIC_TOPIC_WORDS:
+                topic_word = k
+                break
+        if topic_word != "what you're carrying":
+            break
+    if topic_word == "what you're carrying" and current_keywords:
+        topic_word = current_keywords[0]
+
     turn_count = len([1 for r, _ in history if r == "user"])
-    seed = f"{topic_word}-{turn_count}"
-    idx = int(hashlib.md5(seed.encode()).hexdigest(), 16) % len(responses)
-    reply = responses[idx]
+    seed = f"{topic_word}-{turn_count}-{msg_norm[:64]}-{len(''.join(recent_assistant))}"
+    reply = _choose_non_repeating(responses, history, seed)
 
-    # Fill {topic} placeholder with a human-friendly form of the topic word.
-    # Capitalize the first letter for readability.
-    topic_display = topic_word.strip()
+    topic_display = _TOPIC_LABELS.get(topic_word, topic_word).strip()
     if topic_display:
-        topic_display = topic_display[0].upper() + topic_display[1:]
+        topic_display = topic_display[0].lower() + topic_display[1:]
     reply = reply.replace("{topic}", topic_display)
+    # Capitalize sentence starts introduced by topic insertion.
+    reply = re.sub(r"(^|[.!?]\s+)([a-z])", lambda m: m.group(1) + m.group(2).upper(), reply)
 
-    # Also replace {feeling} if present — use the strongest emotion word
-    # from the message if we can find one.
     feeling = ""
-    for emotion_hint in ["anxious", "scared", "sad", "lonely", "tired", "hopeless", "numb", "angry", "frustrated", "overwhelmed", "drained", "pain", "ashamed", "guilty"]:
-        if emotion_hint in _normalise(message):
+    for emotion_hint in [
+        "anxious", "scared", "sad", "lonely", "tired", "hopeless", "numb",
+        "angry", "frustrated", "overwhelmed", "drained", "ashamed", "guilty", "stressed", "worried",
+    ]:
+        if emotion_hint in msg_norm:
             feeling = emotion_hint
             break
-    if feeling:
-        feeling_display = feeling[0].upper() + feeling[1:]
-        reply = reply.replace("{feeling}", feeling_display)
+    if "{feeling}" in reply:
+        reply = reply.replace("{feeling}", feeling or "a lot")
 
-    # Safety scrub
     reply = _scrub(reply)
-
-    # Ensure minimum length; fall back if too short
     if len(reply.strip()) < 15:
         reply = _pick_fallback()
-
-    # Hard cap length
-    if len(reply) > 600:
-        reply = reply[:597].rstrip() + "..."
-
+    if len(reply) > 700:
+        reply = reply[:697].rstrip() + "..."
     return reply
 
 

@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { Play, Pause, RotateCcw, SkipForward, Check, Wind, Heart, Sparkles, Volume2, ArrowLeft } from "lucide-react";
+import { YOGA_POSES } from "../../lib/yoga";
+import { YogaPoseFigure } from "../../components/YogaPoseFigure";
 
 type SoundMode = "rain" | "white-noise" | "forest" | "waves";
 type ExerciseType =
@@ -13,6 +15,7 @@ type ExerciseType =
   | "grounding-54321"
   | "body-scan"
   | "gentle-movement"
+  | "yoga"
   | "soundscape";
 
 type ExerciseState = "idle" | "running" | "paused" | "done";
@@ -25,6 +28,15 @@ interface Exercise {
   bestFor: string;
   icon: string;
   color: string;
+  titleEs?: string;
+  titleFr?: string;
+  titleAr?: string;
+  descEs?: string;
+  descFr?: string;
+  descAr?: string;
+  bestForEs?: string;
+  bestForFr?: string;
+  bestForAr?: string;
 }
 
 const EXERCISES: Exercise[] = [
@@ -36,6 +48,15 @@ const EXERCISES: Exercise[] = [
     bestFor: "First-time users & general everyday stress",
     icon: "🌊",
     color: "from-sky-500/20 to-teal-500/10",
+    titleEs: "Respiración abdominal fácil",
+    titleFr: "Respiration abdominale facile",
+    titleAr: "تنفس البطن السهل",
+    descEs: "Un círculo suave de expansión y contracción para calmar tu sistema nervioso.",
+    descFr: "Un cercle d'expansion et de contraction doux pour apaiser votre système nerveux.",
+    descAr: "دائرة ناعمة من التمدد والانقباض لتهدئة جهازك العصبي.",
+    bestForEs: "Principiantes y estrés cotidiano",
+    bestForFr: "Premiers utilisateurs et stress quotidien",
+    bestForAr: "للمبتدئين والتوتر اليومي العام",
   },
   {
     id: "box-breathing",
@@ -45,6 +66,15 @@ const EXERCISES: Exercise[] = [
     bestFor: "Focus, acute overwhelm & pre-sleep racing thoughts",
     icon: "⏹️",
     color: "from-cyan-500/20 to-blue-500/10",
+    titleEs: "Respiración en caja",
+    titleFr: "Respiration en boîte",
+    titleAr: "تنفس الصندوق",
+    descEs: "Ritmo de 4 tiempos (inhala, mantén, exhala, mantén) que usan atletas y socorristas.",
+    descFr: "Rythme en 4 temps (inspiration, rétention, expiration, rétention) utilisé par les athlètes et les secouristes.",
+    descAr: "إيقاع متساوٍ من ٤ عدّات (شهيق، ثبات، زفير، ثبات) يستخدمه الرياضيون والمستجيبون.",
+    bestForEs: "Concentración, abrumo agudo y pensamientos pre-sueño",
+    bestForFr: "Concentration, débordement aigu et pensées avant le sommeil",
+    bestForAr: "التركيز والإرهاق الحاد والأفكار المتسارعة قبل النوم",
   },
   {
     id: "4-7-8",
@@ -54,6 +84,15 @@ const EXERCISES: Exercise[] = [
     bestFor: "Winding down, deep insomnia & physical panic",
     icon: "🌙",
     color: "from-indigo-500/20 to-purple-500/10",
+    titleEs: "Secuencia calmante 4-7-8",
+    titleFr: "Séquence apaisante 4-7-8",
+    titleAr: "تسلسل التهدئة ٤-٧-٨",
+    descEs: "Inhalación profunda de 4 tiempos, pausa tranquila de 7 y exhalación larga de 8.",
+    descFr: "Inspiration profonde de 4 temps, pause tranquille de 7 et expiration longue de 8.",
+    descAr: "شهيق عميق لأربع عدّات، وتوقف هادئ لسبع، وزفير طويل لثمانٍ.",
+    bestForEs: "Relaxarse, insomnio profundo y pánico físico",
+    bestForFr: "Apaisement, insomnie profonde et panique physique",
+    bestForAr: "الاسترخاء والأرق العميق والهلع الجسدي",
   },
   {
     id: "extended-exhale",
@@ -63,6 +102,15 @@ const EXERCISES: Exercise[] = [
     bestFor: "Physical anxiety, chest tightness & racing heart",
     icon: "🌬️",
     color: "from-amber-500/20 to-orange-500/10",
+    titleEs: "Exhalación extendida",
+    titleFr: "Expiration prolongée",
+    titleAr: "الزفير الممتد",
+    descEs: "Inhala 4, exhala 6, hasta llegar a 4-8. Estimula el reflejo calmante vagal.",
+    descFr: "Inspirez 4, expirez 6, jusqu'à 4-8. Stimule le réflexe calmant vagal.",
+    descAr: "اشهق لأربع، ازفر لست، حتى تصل إلى ٤-٨. يحفّز منعكس التهدئة العصبي.",
+    bestForEs: "Ansiedad física, opresión en el pecho y corazón acelerado",
+    bestForFr: "Anxiété physique, oppression thoracique et cœur qui s'emballe",
+    bestForAr: "القلق الجسدي وضيق الصدر وتسارع القلب",
   },
   {
     id: "grounding-54321",
@@ -72,6 +120,15 @@ const EXERCISES: Exercise[] = [
     bestFor: "Dissociation, panic & spiraling thoughts",
     icon: "🌿",
     color: "from-emerald-500/20 to-green-500/10",
+    titleEs: "Anclaje sensorial 5-4-3-2-1",
+    titleFr: "Ancrage sensoriel 5-4-3-2-1",
+    titleAr: "التثبيت الحسي ٥-٤-٣-٢-١",
+    descEs: "Combina respiraciones lentas con notar 5 vistas, 4 sensaciones, 3 sonidos, 2 aromas, 1 sabor.",
+    descFr: "Combine respirations lentes avec l'observation de 5 vues, 4 sensations, 3 sons, 2 parfums, 1 goût.",
+    descAr: "يجمع بين تنفس بطيء عميق وملاحظة ٥ أشياء تراها و٤ تلمسها و٣ تسمعها و٢ تشمها ونكهة واحدة.",
+    bestForEs: "Disociación, pánico y pensamientos en espiral",
+    bestForFr: "Dissociation, panique et pensées en spirale",
+    bestForAr: "الانفصال والهلع والأفكار المتصاعدة",
   },
   {
     id: "body-scan",
@@ -81,6 +138,15 @@ const EXERCISES: Exercise[] = [
     bestFor: "Physical tension, end-of-day decompression",
     icon: "🧘",
     color: "from-purple-500/20 to-pink-500/10",
+    titleEs: "Escaneo corporal suave",
+    titleFr: "Scan corporel doux",
+    titleAr: "مسح الجسد اللطيف",
+    descEs: "Recorre con atención de los pies a la cabeza, soltando la tensión en los músculos.",
+    descFr: "Parcourez attentivement des pieds à la tête, relâchant la tension dans les muscles.",
+    descAr: "انتقل بانتباه من القدمين إلى الرأس، وقم بإرخاء التوتر المحتبس في العضلات.",
+    bestForEs: "Tensión física, descompresión de fin de día",
+    bestForFr: "Tension physique, décompression de fin de journée",
+    bestForAr: "التوتر الجسدي وتخفيف ضغط نهاية اليوم",
   },
   {
     id: "gentle-movement",
@@ -90,6 +156,33 @@ const EXERCISES: Exercise[] = [
     bestFor: "A gentle movement break",
     icon: "🌱",
     color: "from-lime-500/20 to-emerald-500/10",
+    titleEs: "Movimiento suave",
+    titleFr: "Mouvement doux",
+    titleAr: "الحركة اللطيفة",
+    descEs: "Una secuencia lenta de movimientos fáciles, sentado o de pie. Omite o descansa cuando quieras.",
+    descFr: "Une séquence lente et douce de mouvements assis ou debout. Sautez ou reposez-vous quand vous voulez.",
+    descAr: "تسلسل بطيء من حركات سهلة جالساً أو واقفاً. تخطَّ أو استرح متى شئت.",
+    bestForEs: "Un descanso suave de movimiento",
+    bestForFr: "Une douce pause de mouvement",
+    bestForAr: "استراحة حركة لطيفة",
+  },
+  {
+    id: "yoga",
+    title: "Gentle Yoga Poses",
+    duration: "8 min · optional",
+    desc: "Step-by-step beginner yoga poses with original illustrated figures and calming ambient music. Seated alternatives included.",
+    bestFor: "Slow stretching, posture release & winding down",
+    icon: "🧘",
+    color: "from-fuchsia-500/20 to-purple-500/10",
+    titleEs: "Posturas suaves de yoga",
+    titleFr: "Postures douces de yoga",
+    titleAr: "وضعيات يوغا لطيفة",
+    descEs: "Posturas de yoga para principiantes paso a paso con figuras ilustradas originales y música ambiental calmante. Alternativas sentadas incluidas.",
+    descFr: "Postures de yoga pour débutants pas à pas, avec des figures illustrées originales et une musique d'ambiance apaisante. Alternatives assises incluses.",
+    descAr: "وضعيات يوغا للمبتدئين خطوة بخطوة مع رسوم أصلية وموسيقى محيطية مهدئة. بدائل جالسون مشمولة.",
+    bestForEs: "Estiramiento lento, soltar postura y relaxarse",
+    bestForFr: "Étirements lents, relâchement postural et apaisement",
+    bestForAr: "تمدد بطيء وتحرير الوضعية والاسترخاء",
   },
   {
     id: "soundscape",
@@ -99,6 +192,15 @@ const EXERCISES: Exercise[] = [
     bestFor: "Background comfort while resting or working",
     icon: "🎵",
     color: "from-teal-500/20 to-emerald-500/10",
+    titleEs: "Paisajes sonoros naturales",
+    titleFr: "Ambiances sonores de nature",
+    titleAr: "الأصوات الطبيعية",
+    descEs: "Audio natural sintetizado inmersivo (lluvia, olas del mar, ruido blanco, viento de montaña).",
+    descFr: "Audio de nature synthétisé immersif (pluie, vagues, bruit blanc, vent de montagne).",
+    descAr: "أصوات طبيعة اصطناعية غامرة (مطر، أمواج، ضجيج أبيض، ريح جبلية).",
+    bestForEs: "Comodidad de fondo mientras descansas o trabajas",
+    bestForFr: "Confort de fond pendant le repos ou le travail",
+    bestForAr: "راحة خلفية أثناء الراحة أو العمل",
   },
 ];
 
@@ -682,6 +784,7 @@ const MOVEMENT_STEPS = [
 ];
 
 function GentleMovementExercise() {
+  const { t: _t } = useLanguage();
   const [stepIndex, setStepIndex] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState(30);
   const [timerRunning, setTimerRunning] = useState(false);
@@ -749,7 +852,7 @@ function GentleMovementExercise() {
         <h3 className="font-display text-2xl sm:text-3xl font-semibold mb-3">{step.title}</h3>
         <p className="text-sm text-muted-foreground max-w-md leading-relaxed">{step.guidance}</p>
         <div className="glass-soft rounded-2xl p-4 mt-5 max-w-md text-left text-xs leading-relaxed text-muted-foreground">
-          <span className="font-medium text-foreground">Seated or still option: </span>{step.alternative}
+          <span className="font-medium text-foreground">{_t("yoga.seatedOptionLabel")} </span>{step.alternative}
         </div>
       </div>
 
@@ -779,11 +882,262 @@ function GentleMovementExercise() {
 }
 
 /* ---------------------------------------------------------------------------
+ * 5b. Gentle yoga poses with ambient music
+ * --------------------------------------------------------------------------- */
+
+function YogaPractice() {
+  const { language, t: _t } = useLanguage();
+  const loc = language === "en" ? "" : (language[0].toUpperCase() + language.slice(1)) as "" | "Es" | "Fr" | "Ar";
+  const [poseIndex, setPoseIndex] = useState(0);
+  const [secondsLeft, setSecondsLeft] = useState(30);
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [musicOn, setMusicOn] = useState(false);
+  const [done, setDone] = useState(false);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const padNodesRef = useRef<{ stop: () => void } | null>(null);
+
+  const pose = YOGA_POSES[poseIndex] ?? YOGA_POSES[0];
+  const poseGuidance = (pose[`guidance${loc}` as keyof typeof pose] as string[] | undefined) || pose.guidance;
+  const poseAlternative =
+    (pose[`alternative${loc}` as keyof typeof pose] as string | undefined) || pose.alternative;
+
+  const stopPad = useCallback(() => {
+    padNodesRef.current?.stop();
+    padNodesRef.current = null;
+    if (audioCtxRef.current) {
+      audioCtxRef.current.close().catch(() => {});
+      audioCtxRef.current = null;
+    }
+    setMusicOn(false);
+  }, []);
+
+  const startPad = useCallback(() => {
+    try {
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const ctx = new AudioCtx();
+      audioCtxRef.current = ctx;
+
+      const master = ctx.createGain();
+      master.gain.setValueAtTime(0, ctx.currentTime);
+      master.gain.linearRampToValueAtTime(0.09, ctx.currentTime + 2.5);
+      const filter = ctx.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.setValueAtTime(600, ctx.currentTime);
+      filter.connect(master);
+      master.connect(ctx.destination);
+
+      // Slow chord pad: a low root, a fifth, and soft high tones with
+      // independent slow LFOs so the sound breathes rather than loops.
+      const notes = [130.81, 196.0, 233.08, 311.13, 466.16];
+      const oscillators: OscillatorNode[] = [];
+      notes.forEach((freq, index) => {
+        const osc = ctx.createOscillator();
+        osc.type = index % 2 === 0 ? "sine" : "triangle";
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.02, ctx.currentTime);
+        const lfo = ctx.createOscillator();
+        lfo.frequency.setValueAtTime(0.05 + index * 0.02, ctx.currentTime);
+        const lfoGain = ctx.createGain();
+        lfoGain.gain.setValueAtTime(0.012, ctx.currentTime);
+        lfo.connect(lfoGain);
+        lfoGain.connect(gain.gain);
+        osc.connect(gain);
+        gain.connect(filter);
+        osc.start();
+        lfo.start();
+        oscillators.push(osc, lfo);
+      });
+
+      padNodesRef.current = {
+        stop: () => {
+          oscillators.forEach((node) => {
+            try {
+              node.stop();
+            } catch {
+              // already stopped
+            }
+          });
+        },
+      };
+      setMusicOn(true);
+    } catch {
+      // AudioContext requires a user gesture; toggle handles that.
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => stopPad();
+  }, [stopPad]);
+
+  useEffect(() => {
+    if (!timerRunning) return;
+    const timer = window.setInterval(() => {
+      setSecondsLeft((seconds) => {
+        if (seconds <= 1) {
+          setTimerRunning(false);
+          return 0;
+        }
+        return seconds - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [timerRunning]);
+
+  const moveNext = () => {
+    setTimerRunning(false);
+    if (poseIndex + 1 >= YOGA_POSES.length) {
+      setDone(true);
+      return;
+    }
+    setPoseIndex((current) => current + 1);
+    setSecondsLeft(30);
+  };
+
+  const movePrev = () => {
+    setTimerRunning(false);
+    setPoseIndex((current) => Math.max(0, current - 1));
+    setSecondsLeft(30);
+  };
+
+  const reset = () => {
+    setPoseIndex(0);
+    setSecondsLeft(30);
+    setTimerRunning(false);
+    setDone(false);
+  };
+
+  if (done) {
+    return (
+      <div className="glass rounded-3xl p-8 text-center h-full flex flex-col items-center justify-center">
+        <div className="aurora size-20 rounded-full flex items-center justify-center mb-6">
+          <Check className="size-10 text-primary-foreground" />
+        </div>
+        <h3 className="font-display text-2xl font-semibold mb-2">Yoga practice complete</h3>
+        <p className="text-muted-foreground text-sm max-w-sm mb-6">
+          Twelve gentle poses, at your pace. Breathe out slowly, and notice how your body
+          feels compared to when you started.
+        </p>
+        <button onClick={reset} className="aurora halo rounded-full px-6 py-3 text-sm font-medium text-primary-foreground">
+          <RotateCcw className="size-4 inline mr-2" />
+          Start again
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="glass rounded-3xl p-6 sm:p-8 h-full flex flex-col justify-between overflow-y-auto">
+      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+        <span>
+          Gentle yoga · Pose {poseIndex + 1} of {YOGA_POSES.length}
+        </span>
+        <button
+          onClick={() => (musicOn ? stopPad() : startPad())}
+          className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] transition-colors ${
+            musicOn
+              ? "bg-primary/15 text-primary"
+              : "glass-soft text-muted-foreground hover:text-foreground"
+          }`}
+          aria-pressed={musicOn}
+        >
+          <Volume2 className="size-3" />
+          {musicOn ? "Music on" : "Music off"}
+        </button>
+      </div>
+
+      <div className="flex justify-center gap-1.5 my-3">
+        {YOGA_POSES.map((item, index) => (
+          <button
+            key={item.id}
+            onClick={() => {
+              setPoseIndex(index);
+              setSecondsLeft(30);
+              setTimerRunning(false);
+            }}
+            aria-label={`Go to ${item.name}`}
+            className={`size-2 rounded-full transition-all ${
+              index < poseIndex ? "bg-primary" : index === poseIndex ? "bg-primary animate-pulse scale-125" : "bg-white/10"
+            }`}
+          />
+        ))}
+      </div>
+
+      <div className="flex flex-col items-center text-center">
+        <YogaPoseFigure pose={pose} className="w-44 h-44 sm:w-52 sm:h-52" />
+        <h3 className="font-display text-2xl sm:text-3xl font-semibold mt-2">{pose.name}</h3>
+        <p className="text-[11px] uppercase tracking-widest text-muted-foreground mt-1">
+          {pose.sanskrit} · {pose.level}
+        </p>
+        <ol className="mt-4 space-y-2 max-w-md text-left">
+          {poseGuidance.map((step, index) => (
+            <li key={index} className="flex gap-3 text-sm text-muted-foreground leading-relaxed">
+              <span className="aurora flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold text-primary-foreground">
+                {index + 1}
+              </span>
+              <span>{step}</span>
+            </li>
+          ))}
+        </ol>
+        <div className="glass-soft rounded-2xl p-4 mt-4 max-w-md text-left text-xs leading-relaxed text-muted-foreground">
+          <span className="font-medium text-foreground">{_t("yoga.seatedOptionLabel")} </span>
+          {poseAlternative}
+        </div>
+      </div>
+
+      <div
+        className="rounded-2xl border border-primary/20 bg-primary/5 p-4 mt-5 text-xs leading-relaxed text-muted-foreground"
+        role="note"
+      >
+        Move only within a comfortable range. Skip any pose, rest at any time, and stop if
+        you feel pain, dizziness, numbness, or uncomfortable breathing. This is general
+        wellbeing guidance, not medical or injury advice. Figures are original illustrations,
+        not photographs.
+      </div>
+
+      <div className="flex flex-wrap items-center justify-center gap-3 mt-5">
+        <button
+          onClick={movePrev}
+          disabled={poseIndex === 0}
+          className="glass-soft flex items-center gap-2 rounded-full px-4 py-3 text-sm text-muted-foreground hover:text-foreground disabled:opacity-40"
+        >
+          <ArrowLeft className="size-4" />
+          Previous
+        </button>
+        <button
+          onClick={() => setTimerRunning((running) => !running)}
+          disabled={secondsLeft === 0}
+          className="aurora halo flex items-center gap-2 rounded-full px-6 py-3 text-sm font-medium text-primary-foreground disabled:opacity-50"
+        >
+          {timerRunning ? <Pause className="size-4" /> : <Play className="size-4" />}
+          {timerRunning ? "Pause" : secondsLeft === 0 ? "Timer done" : `Hold guide · ${secondsLeft}s`}
+        </button>
+        <button onClick={moveNext} className="glass-soft flex items-center gap-2 rounded-full px-5 py-3 text-sm">
+          {poseIndex + 1 === YOGA_POSES.length ? "Finish" : "Next pose"}
+          <SkipForward className="size-4" />
+        </button>
+        <button
+          onClick={reset}
+          className="glass-soft rounded-full px-4 py-3 text-sm text-muted-foreground"
+          aria-label="Restart yoga practice"
+        >
+          <RotateCcw className="size-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------------
  * Main Practices Page
  * --------------------------------------------------------------------------- */
 
 export default function PracticesPage() {
   const { t: _t } = useLanguage();
+  const { language } = useLanguage();
+  const loc = language === "en" ? "" : (language[0].toUpperCase() + language.slice(1)) as "" | "Es" | "Fr" | "Ar";
   const [selectedId, setSelectedId] = useState<ExerciseType | null>(null);
 
   const selectedExercise = EXERCISES.find((e) => e.id === selectedId);
@@ -835,16 +1189,18 @@ export default function PracticesPage() {
                 <div className="flex-1">
                   <div className="flex items-center justify-between">
                     <h3 className="font-display text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
-                      {ex.title}
+                      {(ex[`title${loc}` as keyof Exercise] as string | undefined) || ex.title}
                     </h3>
                     <span className="text-[11px] font-medium text-muted-foreground bg-white/5 rounded-full px-2.5 py-0.5">
                       {ex.duration}
                     </span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">{ex.desc}</p>
+                  <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+                    {(ex[`desc${loc}` as keyof Exercise] as string | undefined) || ex.desc}
+                  </p>
                   <div className="mt-3 text-[11px] text-primary/80 flex items-center gap-1.5">
                     <Sparkles className="size-3" />
-                    <span>{ex.bestFor}</span>
+                    <span>{(ex[`bestFor${loc}` as keyof Exercise] as string | undefined) || ex.bestFor}</span>
                   </div>
                 </div>
               </div>
@@ -902,6 +1258,7 @@ export default function PracticesPage() {
             {selectedId === "grounding-54321" && <Grounding54321 />}
             {selectedId === "body-scan" && <BodyScanExercise />}
             {selectedId === "gentle-movement" && <GentleMovementExercise />}
+            {selectedId === "yoga" && <YogaPractice />}
             {selectedId === "soundscape" && <SoundscapeExercise />}
           </div>
         )}

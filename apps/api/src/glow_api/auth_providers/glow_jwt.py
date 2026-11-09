@@ -150,13 +150,13 @@ def _verify_token(
 
 
 def _get_key_bytes(hex_key: str) -> bytes:
-    """Convert a hex-encoded key string to bytes, validating minimum length."""
+    """Convert key material to bytes (hex or URL-safe base64, minimum 32 bytes)."""
+    from glow_api.kms import decode_key_material
+
     try:
-        key_bytes = bytes.fromhex(hex_key)
+        key_bytes = decode_key_material(hex_key)
     except ValueError as e:
         raise ProviderNotConfiguredError("glow_jwt_auth") from e
-    if len(key_bytes) < 32:
-        raise ProviderNotConfiguredError("glow_jwt_auth (key too short, minimum 32 bytes)")
     return key_bytes
 
 

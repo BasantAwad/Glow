@@ -101,12 +101,16 @@ async def register_user(
     diagnosis_disclosed: bool,
     diagnosis_note: str | None,
     locale: str = "EN",
+    age: int | None = None,
+    gender: str | None = None,
+    medications: str | None = None,
 ) -> UserAccountModel:
     """Create a new account. Raises ValueError on validation/duplicate errors.
 
-    The optional diagnosis note is stored envelope-encrypted and is used only
-    to give the AI companion context the user explicitly chose to share. It is
-    revocable at any time from the profile page.
+    The optional diagnosis note and medication list are stored
+    envelope-encrypted and used only to give the AI companion context the
+    user explicitly chose to share. Both are revocable at any time from the
+    profile page.
     """
     from glow_api.crypto import EnvelopeEncryption
     from glow_api.kms import kms_service
@@ -117,6 +121,10 @@ async def register_user(
     validate_password(password)
     if not is_adult_confirmed:
         raise ValueError("Glow is currently adults-only. Please confirm you are 18+.")
+    if age is not None and not (18 <= age <= 110):
+        raise ValueError("Glow is currently adults-only (18+).")
+    if gender is not None and gender not in {"female", "male", "non_binary", "prefer_not_to_say"}:
+        raise ValueError("Unsupported gender option.")
 
     existing = (
         await db.execute(select(UserAccountModel).where(UserAccountModel.email == email))
@@ -135,6 +143,13 @@ async def register_user(
         )
         encrypted_note = nonce + ciphertext
 
+    encrypted_medications: bytes | None = None
+    if medications and medications.strip():
+        nonce, ciphertext = EnvelopeEncryption.encrypt(
+            key, medications.strip().encode("utf-8")
+        )
+        encrypted_medications = nonce + ciphertext
+
     user = UserAccountModel(
         user_id=new_user_id(),
         created_at=now,
@@ -148,6 +163,10 @@ async def register_user(
         diagnosis_disclosed=bool(diagnosis_disclosed),
         diagnosis_note_encrypted=encrypted_note,
         diagnosis_key_id=key_id if encrypted_note else None,
+        gender=gender,
+        age=age,
+        medications_encrypted=encrypted_medications,
+        medications_key_id=key_id if encrypted_medications else None,
     )
     user.preferences = UserPreferencesModel(  # type: ignore[assignment]
         locale=(

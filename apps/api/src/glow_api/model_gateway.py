@@ -108,6 +108,102 @@ class ModelGateway(abc.ABC):
         """
 
 
+class FallbackModelGateway(ModelGateway):
+    """Try gateways in order, falling back only when a provider fails.
+
+    The primary provider is always attempted first. If it is unconfigured,
+    errors, or returns empty text, the next configured gateway is tried.
+    The final gateway can be the local rule-based engine (explicitly enabled).
+    Safety checks still run in the orchestrator after generation.
+    """
+
+    def __init__(self, gateways: list[ModelGateway]) -> None:
+        self._gateways = [g for g in gateways if g is not None]
+
+    @property
+    def is_configured(self) -> bool:
+        return any(g.is_configured for g in self._gateways)
+
+    async def generate(self, request: GenerationRequest) -> GenerationResponse:
+        import logging
+
+        from glow_api.errors import ErrorCode, GlowError, ProviderNotConfiguredError
+
+        log = logging.getLogger("glow_api.model_gateway")
+        last_error: Exception | None = None
+
+        for index, gateway in enumerate(self._gateways):
+            if not gateway.is_configured:
+                continue
+            try:
+                response = await gateway.generate(request)
+                if response and response.text and response.text.strip():
+                    if index > 0:
+                        log.warning(
+                            "Primary model unavailable; used fallback gateway %s (%s)",
+                            index,
+                            type(gateway).__name__,
+                        )
+                    return response
+                last_error = GlowError(
+                    ErrorCode.PROVIDER_UNAVAILABLE,
+                    "The model provider returned an empty response.",
+                    http_status=503,
+                )
+            except ProviderNotConfiguredError as exc:
+                last_error = exc
+                continue
+            except Exception as exc:
+                last_error = exc
+                log.warning(
+                    "Model gateway %s failed (%s); trying next fallback",
+                    type(gateway).__name__,
+                    type(exc).__name__,
+                )
+                continue
+
+        if last_error is not None:
+            raise last_error
+        raise ProviderNotConfiguredError("model_gateway")
+
+    async def stream(self, request: GenerationRequest) -> AsyncIterator[str]:
+        """Stream from the first working gateway.
+
+        Fallback is only attempted before any chunk has been yielded; once
+        output has started, switching providers would produce incoherent text.
+        """
+        import logging
+
+        from glow_api.errors import ProviderNotConfiguredError
+
+        log = logging.getLogger("glow_api.model_gateway")
+        last_error: Exception | None = None
+
+        for gateway in self._gateways:
+            if not gateway.is_configured:
+                continue
+            yielded = False
+            try:
+                async for chunk in gateway.stream(request):
+                    yielded = True
+                    yield chunk
+                return
+            except Exception as exc:
+                last_error = exc
+                if yielded:
+                    raise
+                log.warning(
+                    "Model stream gateway %s failed (%s); trying next fallback",
+                    type(gateway).__name__,
+                    type(exc).__name__,
+                )
+                continue
+
+        if last_error is not None:
+            raise last_error
+        raise ProviderNotConfiguredError("model_gateway")
+
+
 class UnconfiguredModelGateway(ModelGateway):
     """Sentinel gateway used until a real provider is approved."""
 
@@ -126,43 +222,31 @@ class UnconfiguredModelGateway(ModelGateway):
 
 
 class OpenWeightsModelGateway(ModelGateway):
-    """
-    Model gateway implementation for a locally hosted, open-weights LLM.
-    By default, it expects a vLLM instance serving an OpenAI-compatible API
-    at `http://localhost:8000/v1` or an OpenRouter-compatible endpoint.
+    """OpenAI-compatible chat completions gateway.
 
-    Strictly enforces the user's data processing policy by never sending
-    sensitive session data to third-party endpoints.
+    Works with vLLM, Ollama (/v1), Hugging Face Router
+    (https://router.huggingface.co/v1), OpenRouter, Groq, or any compatible API.
+    Session text is sent only to the configured endpoint.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        api_base: str | None = None,
+        api_key: str | None = None,
+        model_id: str | None = None,
+        web_search: object | None = None,
+    ) -> None:
         from glow_api.settings import settings
-        self.api_base = settings.llm_api_base
-        self.api_key = settings.llm_api_key
-        self.model_id = settings.llm_model_id
+        self.api_base = api_base or settings.llm_api_base
+        self.api_key = api_key if api_key is not None else settings.llm_api_key
+        self.model_id = model_id or settings.llm_model_id
+        self.web_search = web_search
 
     @property
     def is_configured(self) -> bool:
         return bool(self.api_base)
 
-    async def generate(self, request: GenerationRequest) -> GenerationResponse:
-        import httpx
-        import time
-        from glow_api.errors import ProviderNotConfiguredError, GlowError, ErrorCode
-
-        if not self.is_configured:
-            raise ProviderNotConfiguredError("model_gateway")
-
-        # Assemble OpenAI-compatible messages array
-        messages = [{"role": "system", "content": request.system_prompt}]
-        for role, text in request.conversation_history:
-            messages.append({"role": role, "content": text})
-        messages.append({"role": "user", "content": request.user_message})
-
-        headers = {"Content-Type": "application/json"}
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
-
+    def _base_payload(self, request: GenerationRequest, messages: list[dict]) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "model": self.model_id,
             "messages": messages,
@@ -173,54 +257,164 @@ class OpenWeightsModelGateway(ModelGateway):
         }
         if "nemotron" in (self.model_id or "").lower():
             payload["reasoning"] = {"enabled": False, "exclude": True}
+        return payload
+
+    async def _complete_once(
+        self,
+        request: GenerationRequest,
+        messages: list[dict],
+        tools: list[dict] | None,
+    ) -> dict[str, Any]:
+        """One chat-completions call with free-tier retry + tool-compat fallback.
+
+        If a provider rejects the tools payload (some free models do not
+        support function calling), retry once without tools so the turn still
+        completes instead of failing into the fallback chain.
+        """
+        import httpx
+        from glow_api.errors import GlowError, ErrorCode
+
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+
+        payload = self._base_payload(request, messages)
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
 
         url = self.api_base.rstrip("/") + "/chat/completions"
-        start_time = time.perf_counter()
+        last_exc: Exception | None = None
+        for attempt in range(3):
+            try:
+                async with httpx.AsyncClient(timeout=request.timeout_sec) as client:
+                    resp = await client.post(url, headers=headers, json=payload)
+                if resp.status_code in (429, 500, 502, 503, 504) and attempt == 0:
+                    import asyncio
 
-        try:
-            async with httpx.AsyncClient(timeout=request.timeout_sec) as client:
-                resp = await client.post(url, headers=headers, json=payload)
+                    await asyncio.sleep(1.5)
+                    continue
+                if resp.status_code == 400 and tools:
+                    # Provider rejected function calling — answer without tools.
+                    return await self._complete_once(request, messages, None)
                 resp.raise_for_status()
-                data = resp.json()
+                return resp.json()
+            except GlowError:
+                raise
+            except Exception as exc:
+                last_exc = exc
+                break
 
-            latency_ms = (time.perf_counter() - start_time) * 1000.0
+        import logging
 
+        logging.getLogger("glow_api.model_gateway").warning(
+            "Configured model provider request failed (%s)",
+            type(last_exc).__name__ if last_exc else "unknown",
+        )
+        raise GlowError(
+            ErrorCode.PROVIDER_UNAVAILABLE,
+            "The configured model provider is unavailable. Please try again later.",
+            http_status=503,
+        ) from last_exc
+
+    async def generate(self, request: GenerationRequest) -> GenerationResponse:
+        import time
+        from glow_api.errors import ProviderNotConfiguredError
+        from glow_api.web_search import (
+            WEB_SEARCH_TOOL,
+            format_tool_result,
+            record_search,
+            sanitize_query,
+            search_budget_allows,
+        )
+        from glow_api.settings import settings
+
+        if not self.is_configured:
+            raise ProviderNotConfiguredError("model_gateway")
+
+        messages: list[dict] = [{"role": "system", "content": request.system_prompt}]
+        for role, text in request.conversation_history:
+            messages.append({"role": role, "content": text})
+        messages.append({"role": "user", "content": request.user_message})
+
+        search = self.web_search
+        use_tools = bool(search is not None and getattr(search, "is_configured", False))
+        tools = [WEB_SEARCH_TOOL] if use_tools else None
+
+        start_time = time.perf_counter()
+        data = await self._complete_once(request, messages, tools)
+
+        # Tool loop: execute web_search calls the model makes, then re-prompt.
+        # Capped at 3 search rounds so a turn can never loop indefinitely.
+        for _ in range(3):
             choices = data.get("choices", [])
             if not choices:
-                raise RuntimeError("No choices returned by model provider.")
+                break
+            message = choices[0].get("message", {}) or {}
+            tool_calls = message.get("tool_calls") or []
+            if not tool_calls or not use_tools or search is None:
+                break
+            messages.append(message)
+            for call in tool_calls:
+                function = call.get("function", {}) or {}
+                if function.get("name") != "web_search":
+                    continue
+                arguments = function.get("arguments") or {}
+                if isinstance(arguments, str):
+                    import json as _json
 
-            message = choices[0].get("message", {})
-            text = message.get("content", "")
+                    try:
+                        arguments = _json.loads(arguments)
+                    except Exception:
+                        arguments = {}
+                query = sanitize_query(str(arguments.get("query") or ""))
+                if not query:
+                    result_text = "Empty search query."
+                elif not search_budget_allows(request.session_id, settings.search_max_per_session):
+                    result_text = (
+                        "Search budget for this conversation is used up. "
+                        "Answer without searching."
+                    )
+                else:
+                    results = await search.search(query, settings.search_max_results)
+                    record_search(request.session_id)
+                    result_text = format_tool_result(results)
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": call.get("id", "search"),
+                        "content": result_text,
+                    }
+                )
+            data = await self._complete_once(request, messages, None)
 
-            finish_reason = choices[0].get("finish_reason", "unknown")
-            if finish_reason == "stop":
-                stop_reason = GenerationStopReason.STOP_TOKEN
-            elif finish_reason == "length":
-                stop_reason = GenerationStopReason.MAX_TOKENS
-            else:
-                stop_reason = GenerationStopReason.ERROR
+        latency_ms = (time.perf_counter() - start_time) * 1000.0
 
-            usage = data.get("usage", {})
-            token_count = usage.get("total_tokens", 0)
+        choices = data.get("choices", [])
+        if not choices:
+            raise RuntimeError("No choices returned by model provider.")
 
-            return GenerationResponse(
-                text=text,
-                stop_reason=stop_reason,
-                model_id=data.get("model", self.model_id),
-                latency_ms=latency_ms,
-                token_count=token_count,
-            )
-        except Exception as exc:
-            import logging
+        message = choices[0].get("message", {})
+        text = message.get("content", "")
 
-            logging.getLogger("glow_api.model_gateway").warning(
-                "Configured model provider request failed (%s)", type(exc).__name__
-            )
-            raise GlowError(
-                ErrorCode.PROVIDER_UNAVAILABLE,
-                "The configured model provider is unavailable. Please try again later.",
-                http_status=503,
-            ) from exc
+        finish_reason = choices[0].get("finish_reason", "unknown")
+        if finish_reason == "stop":
+            stop_reason = GenerationStopReason.STOP_TOKEN
+        elif finish_reason == "length":
+            stop_reason = GenerationStopReason.MAX_TOKENS
+        else:
+            stop_reason = GenerationStopReason.ERROR
+
+        usage = data.get("usage", {})
+        token_count = usage.get("total_tokens", 0)
+
+        return GenerationResponse(
+            text=text,
+            stop_reason=stop_reason,
+            model_id=data.get("model", self.model_id),
+            latency_ms=latency_ms,
+            token_count=token_count,
+        )
 
     async def stream(self, request: GenerationRequest) -> AsyncIterator[str]:
         import httpx
@@ -280,14 +474,147 @@ class OpenWeightsModelGateway(ModelGateway):
 
 
 # Gateway factory — lazy, called at dependency-injection time (not at import time).
-# Never silently select a different model when the configured provider is absent.
-def get_model_gateway() -> ModelGateway:
-    """Return the configured model gateway, or an explicit unconfigured sentinel.
+def _hf_token(settings) -> str | None:
+    import os
 
-    The local context engine remains available for direct, explicitly selected
-    use in development; it is never substituted for the configured model.
-    """
-    from glow_api.settings import settings
+    return (
+        getattr(settings, "hf_token", None)
+        or os.environ.get("HUGGINGFACE_API_KEY")
+        or os.environ.get("HF_TOKEN")
+    )
+
+
+def _search_gateway():
+    """Opt-in web search gateway, or None when disabled/unconfigured."""
+    from glow_api.web_search import get_web_search_gateway
+
+    return get_web_search_gateway()
+
+
+def _build_primary_gateway(settings, log) -> ModelGateway | None:
+    provider = getattr(settings, "llm_provider", "auto")
+
+    if provider == "disabled":
+        return None
+    if provider == "local":
+        from glow_api.local_gateway import LocalModelGateway
+
+        log.info("Using explicit local context engine (LLM provider=local)")
+        return LocalModelGateway()
+    if provider == "openai_compatible":
+        if settings.llm_api_base:
+            log.info("Primary LLM: OpenAI-compatible (%s)", settings.llm_api_base)
+            return OpenWeightsModelGateway(web_search=_search_gateway())
+        log.warning("GLOW_LLM_PROVIDER=openai_compatible but GLOW_LLM_API_BASE is missing")
+        return None
+    if provider == "huggingface":
+        token = _hf_token(settings)
+        if token:
+            log.info("Primary LLM: Hugging Face Router (model=%s)", getattr(settings, "hf_model_id", ""))
+            return OpenWeightsModelGateway(
+                api_base=getattr(settings, "hf_api_base", "https://router.huggingface.co/v1"),
+                api_key=token,
+                model_id=getattr(settings, "hf_model_id", settings.llm_model_id),
+                web_search=_search_gateway(),
+            )
+        log.warning("GLOW_LLM_PROVIDER=huggingface but no HF token found")
+        return None
+
+    # auto: external only when a base URL is configured.
     if settings.llm_api_base:
-        return OpenWeightsModelGateway()
-    return UnconfiguredModelGateway()
+        log.info("Primary LLM: OpenAI-compatible (auto, %s)", settings.llm_api_base)
+        return OpenWeightsModelGateway(web_search=_search_gateway())
+    return None
+
+
+def _build_fallback_gateway(settings, log, local_enabled: bool) -> ModelGateway | None:
+    provider = getattr(settings, "llm_fallback_provider", "local")
+
+    if provider == "none":
+        return None
+    if provider == "local":
+        if not local_enabled:
+            return None
+        from glow_api.local_gateway import LocalModelGateway
+
+        log.info("Fallback LLM: local context engine")
+        return LocalModelGateway()
+    if provider == "openai_compatible":
+        base = getattr(settings, "llm_fallback_api_base", None)
+        if not base:
+            log.warning("Fallback provider openai_compatible but GLOW_LLM_FALLBACK_API_BASE is missing")
+            return None
+        log.info("Fallback LLM: OpenAI-compatible (%s)", base)
+        return OpenWeightsModelGateway(
+            api_base=base,
+            api_key=getattr(settings, "llm_fallback_api_key", None),
+            model_id=getattr(settings, "llm_fallback_model_id", None) or settings.llm_model_id,
+        )
+    if provider == "huggingface":
+        token = _hf_token(settings)
+        if not token:
+            log.warning("Fallback provider huggingface but no HF token found")
+            return None
+        log.info("Fallback LLM: Hugging Face Router")
+        return OpenWeightsModelGateway(
+            api_base=getattr(settings, "hf_api_base", "https://router.huggingface.co/v1"),
+            api_key=token,
+            model_id=getattr(settings, "hf_model_id", settings.llm_model_id),
+        )
+    return None
+
+
+def get_model_gateway() -> ModelGateway:
+    """Return the configured model gateway, optionally wrapped in a fallback chain.
+
+    Order: primary -> configured secondary -> local engine (last resort).
+    ``GLOW_LLM_LOCAL_FALLBACK_ENABLED`` defaults to true everywhere so a provider
+    outage degrades to the local engine instead of breaking the conversation.
+    Set it to false to keep strict fail-clear behavior (e.g. compliance tests).
+    """
+    import logging
+
+    from glow_api.settings import settings
+
+    log = logging.getLogger(__name__)
+    provider = getattr(settings, "llm_provider", "auto")
+
+    if provider == "disabled":
+        return UnconfiguredModelGateway()
+
+    local_enabled = getattr(settings, "llm_local_fallback_enabled", True)
+    if local_enabled is None:
+        # Legacy behavior: opt in by default only in development.
+        local_enabled = settings.environment == "development"
+
+    primary = _build_primary_gateway(settings, log)
+    fallback = _build_fallback_gateway(settings, log, local_enabled)
+
+    chain: list[ModelGateway] = []
+    if primary is not None:
+        chain.append(primary)
+    if fallback is not None:
+        # Avoid duplicate local engines (e.g. explicit local primary + local fallback).
+        from glow_api.local_gateway import LocalModelGateway
+
+        if not (isinstance(fallback, LocalModelGateway) and any(isinstance(g, LocalModelGateway) for g in chain)):
+            chain.append(fallback)
+
+    # Always keep the local engine as the final last resort when enabled.
+    if local_enabled:
+        from glow_api.local_gateway import LocalModelGateway
+
+        if not any(isinstance(g, LocalModelGateway) for g in chain):
+            log.info("Final fallback LLM: local context engine")
+            chain.append(LocalModelGateway())
+
+    if not chain:
+        return UnconfiguredModelGateway()
+    if len(chain) == 1:
+        return chain[0]
+
+    log.info(
+        "LLM fallback chain: %s",
+        " -> ".join(type(g).__name__ for g in chain),
+    )
+    return FallbackModelGateway(chain)

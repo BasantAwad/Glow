@@ -185,7 +185,9 @@ class MemoryService:
         if not s.master_key:
             raise ProviderNotConfiguredError("encryption (master key missing)")
             
-        key_bytes = bytes.fromhex(s.master_key)
+        from glow_api.kms import decode_key_material
+
+        key_bytes = decode_key_material(s.master_key)
         nonce, ciphertext = EnvelopeEncryption.encrypt(key_bytes, candidate.text_preview.encode())
         # The encrypted payload is not persisted here since ORM is deferred, 
         # but this validates the flow.

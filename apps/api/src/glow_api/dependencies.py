@@ -9,7 +9,7 @@ from __future__ import annotations
 import datetime
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +21,7 @@ from glow_api.consent import ConsentRecord
 from glow_api.database import get_db_session
 from glow_api.errors import AuthenticationError, NotFoundError
 from glow_api.models import ConsentRecordModel, UserAccountModel
+from glow_api.settings import get_settings
 from glow_api.user import AccessibilityFlag, UserAccount, UserPreferences
 
 # ---------------------------------------------------------------------------
@@ -49,20 +50,33 @@ def get_auth_provider() -> AuthProvider:
 http_bearer = HTTPBearer(auto_error=False)
 
 
+def _cookie_token(request: Request) -> str | None:
+    settings = get_settings()
+    if not settings.auth_cookie_enabled:
+        return None
+    token = request.cookies.get(settings.auth_cookie_name)
+    return token if token else None
+
+
 async def get_auth_principal(
+    request: Request,
     auth: Annotated[HTTPAuthorizationCredentials | None, Depends(http_bearer)],
     auth_provider: Annotated[AuthProvider, Depends(get_auth_provider)],
 ) -> AuthPrincipal:
     """Extract and validate the caller's identity token.
 
+    Accepts either an Authorization Bearer token or an HttpOnly auth cookie
+    (when enabled). The Authorization header takes precedence.
+
     Raises:
         AuthenticationError: If the token is missing or invalid.
         ProviderNotConfiguredError: If no auth provider is selected yet.
     """
-    if not auth or not auth.credentials:
-        raise AuthenticationError(detail="Missing bearer token.")
+    token = auth.credentials if auth and auth.credentials else _cookie_token(request)
+    if not token:
+        raise AuthenticationError(detail="Missing authentication token.")
 
-    result = await auth_provider.validate_token(auth.credentials)
+    result = await auth_provider.validate_token(token)
     if not result.valid or result.principal is None:
         raise AuthenticationError(detail=result.error_reason or "Invalid token.")
 

@@ -17,6 +17,10 @@ The database remains **empty by default**. The curator-only `store_approved_evid
 - **WHO:** Link-only pending written commercial permission or a content-specific license compatible with Glow. WHO's standard publication license is CC BY-NC-SA, and its policy says permission is required for commercial uses. See the [WHO copyright and licensing policy](https://www.who.int/about/policies/publishing/copyright).
 - **NHS:** Link-only pending content-specific reuse permission/license review; the public self-help pages are copyrighted. See [NHS self-help](https://www.nhs.uk/mental-health/self-help/).
 - **Centre for Clinical Interventions (CCI):** Link-only pending rights review/permission and qualified clinical review. CCI identifies its resources as Government of Western Australia copyright and says they are not a substitute for professional care. See [CCI self-help resources](https://www.cci.health.wa.gov.au/Resources/Looking-After-Yourself) and its [copyright/disclaimer](https://www.cci.health.wa.gov.au/Utilities/Copyright-and-Disclaimer).
+- **Mental Health Foundation (UK):** Candidate for physical-health / mental-health psychoeducation. Article copyrighted by the Foundation; link-only until reuse permission is confirmed. Listed on the app's Learn page as an external reading link.
+- **Verywell Mind:** Commercial health publisher; articles are copyrighted and medically reviewed. Link-only; never ingest or paraphrase clinical content into the registry.
+- **Simply Psychology:** Commercial/education publisher; copyrighted. Link-only.
+- **APA Global Psychology Alliance (Lesson 6 PDF):** APA copyright; link-only. Note from 2026-11-09 check: automated fetch returned a bot-protection page rather than the PDF — verify the link resolves in a normal browser before treating it as a stable reference.
 
 These source links may be shown as external reading links, but their text must not be scraped, copied into the registry, embedded, or served as Glow content until the indicated rights and review gates are met. Do not represent any source as clinically approved for Glow merely because the publisher is reputable.
 

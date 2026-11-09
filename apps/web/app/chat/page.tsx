@@ -147,7 +147,7 @@ export default function ChatPage() {
           {
             id: `checkin-${Date.now()}`,
             role: "assistant",
-            content: CHECK_INS[Math.min(checkInCountRef.current, CHECK_INS.length - 1)],
+            content: t(CHECK_INS[Math.min(checkInCountRef.current, CHECK_INS.length - 1)]),
           },
         ]);
         checkInCountRef.current += 1;
@@ -160,7 +160,7 @@ export default function ChatPage() {
       cancelled = true;
       if (checkInTimerRef.current) clearTimeout(checkInTimerRef.current);
     };
-  }, [busy, userTyping, messages, sessionMode]);
+  }, [busy, userTyping, messages, sessionMode, t]);
 
   /* Mode selection handler */
   const handleModeSelect = async (mode: SessionMode) => {

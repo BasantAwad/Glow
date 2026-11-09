@@ -45,16 +45,26 @@ const state: TokenState = { token: null, userId: null };
 
 const STORAGE_KEY = "glow.dev.token";
 const USER_KEY = "glow.dev.userId";
+const AUTH_TOKEN_KEY = "glow.auth.token";
+const AUTH_USER_KEY = "glow.auth.userId";
 
 /** Wrap fetch and convert network-level errors to GlowApiOfflineError. */
 export async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
   try {
-    return await fetch(url, init);
+    return await fetch(url, { credentials: init?.credentials ?? "include", ...init });
   } catch (err) {
     // TypeError: Failed to fetch — server is unreachable
     if (err instanceof TypeError) throw new GlowApiOfflineError();
     throw err;
   }
+}
+
+function getStoredCredentialAuth(): TokenState {
+  if (typeof window === "undefined") return { token: null, userId: null };
+  return {
+    token: localStorage.getItem(AUTH_TOKEN_KEY) ?? sessionStorage.getItem(AUTH_TOKEN_KEY),
+    userId: localStorage.getItem(AUTH_USER_KEY) ?? sessionStorage.getItem(AUTH_USER_KEY),
+  };
 }
 
 /** Convert an API failure into a short message suitable for the UI. */
@@ -87,16 +97,25 @@ async function throwApiError(response: Response, fallback: string): Promise<neve
   throw new GlowApiError(response.status, message, code);
 }
 
-/** Ensure a stable user identity + token exist (dev bootstrap via backend). */
+/** Ensure a stable user identity + token exist.
+ *
+ * Prefers an existing credential login session. Falls back to the development
+ * bootstrap endpoint only when no credential session is present.
+ */
 export async function ensureSession(): Promise<{ token: string; userId: string }> {
   if (state.token && state.userId) return { token: state.token, userId: state.userId };
+
+  const cred = getStoredCredentialAuth();
+  if (cred.token && cred.userId) {
+    state.token = cred.token;
+    state.userId = cred.userId;
+    return { token: cred.token, userId: cred.userId };
+  }
 
   const savedToken = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
   const savedUser = typeof window !== "undefined" ? localStorage.getItem(USER_KEY) : null;
 
   if (savedToken && savedUser) {
-    // Verify the saved token is still accepted. If the server is down this
-    // will throw GlowApiOfflineError rather than silently failing.
     const res = await apiFetch(`${API_BASE}/sessions`, {
       method: "POST",
       headers: { Authorization: `Bearer ${savedToken}` },
@@ -106,7 +125,6 @@ export async function ensureSession(): Promise<{ token: string; userId: string }
       state.userId = savedUser;
       return { token: savedToken, userId: savedUser };
     }
-    // Token rejected — clear storage and fall through to re-bootstrap.
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(USER_KEY);
   }

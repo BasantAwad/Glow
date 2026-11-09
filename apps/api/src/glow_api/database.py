@@ -92,20 +92,23 @@ class DatabaseManager:
 
         # SQLite-specific tuning
         connect_args: dict[str, Any] = {}
+        engine_kwargs: dict[str, Any] = {
+            "echo": settings.environment == "development",
+            "future": True,
+            "pool_pre_ping": True,
+            "pool_size": 5,
+            "max_overflow": 10,
+            "pool_timeout": 30,
+            "pool_recycle": 3600,
+        }
         if db_url.startswith("sqlite"):
             connect_args.update(_SQLITE_CONNECT_ARGS)
+            engine_kwargs["connect_args"] = connect_args
+            # SQLite serializes writers; a tiny pool avoids needless churn.
+            engine_kwargs["pool_size"] = 2
+            engine_kwargs["max_overflow"] = 3
 
-        self._engine = create_async_engine(
-            db_url,
-            echo=settings.environment == "development",
-            future=True,
-            pool_pre_ping=True,
-            # Small pool for SQLite — it serializes writes anyway.
-            pool_size=5,
-            max_overflow=10,
-            pool_timeout=30,
-            pool_recycle=3600,
-        )
+        self._engine = create_async_engine(db_url, **engine_kwargs)
         self._session_factory = async_sessionmaker(
             bind=self._engine,
             class_=AsyncSession,
@@ -113,25 +116,25 @@ class DatabaseManager:
             autoflush=False,
         )
 
-        # Enable WAL mode on SQLite so concurrent access doesn't deadlock.
-        if db_url.startswith("sqlite"):
-            self._ensure_sqlite_wal()
+    async def configure_sqlite(self) -> None:
+        """Enable WAL journal mode so concurrent reads don't block writes.
 
-    async def _ensure_sqlite_wal(self) -> None:
-        """Enable WAL journal mode so concurrent reads don't block writes."""
-        if self._engine is None:
+        Called from the async application lifespan after engine initialization.
+        """
+        if self._engine is None or not str(self._engine.url).startswith("sqlite"):
             return
         try:
             async with self._engine.begin() as conn:
+                from sqlalchemy import text
+
+                await conn.execute(text("PRAGMA journal_mode=WAL"))
                 await conn.execute(
-                    __import__("sqlalchemy").text("PRAGMA journal_mode=WAL")
-                )
-                await conn.execute(
-                    __import__("sqlalchemy").text(f"PRAGMA busy_timeout={_SQLITE_TIMEOUT * 1000}")
+                    text(f"PRAGMA busy_timeout={_SQLITE_TIMEOUT * 1000}")
                 )
         except Exception as exc:
             # Non-fatal: the server still works without WAL, just slower.
             import logging
+
             logging.getLogger("glow_api.database").warning(
                 "Failed to enable SQLite WAL mode: %s", exc
             )

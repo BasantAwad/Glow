@@ -28,5 +28,9 @@ public/avatar.vrm
 
 # Local dev artifacts
 glow.db
+*.db
+*.db-shm
+*.db-wal
+test-runtime/
 glow_e2e_token.txt
 tts_test.wav

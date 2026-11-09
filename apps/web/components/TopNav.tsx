@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   Globe,
   ChevronDown,
@@ -20,13 +21,25 @@ import {
 import { GlowMark } from "./GlowMark";
 import { useLanguage, LANGUAGE_LABELS } from "../contexts/LanguageContext";
 import type { Language } from "../contexts/LanguageContext";
-import { getStoredAuth, clearStoredAuth } from "../lib/auth";
+import { getStoredAuth, clearStoredAuth, type AuthState } from "../lib/auth";
 
 export function TopNav() {
   const pathname = usePathname();
   const router = useRouter();
   const { language, setLanguage, t } = useLanguage();
-  const auth = typeof window !== "undefined" ? getStoredAuth() : null;
+  // Read auth after mount so server and first client render match (avoids
+  // hydration mismatch), then keep it in sync with login/logout events.
+  const [auth, setAuth] = useState<AuthState | null>(null);
+  useEffect(() => {
+    const sync = () => setAuth(getStoredAuth());
+    sync();
+    window.addEventListener("glow-auth-change", sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener("glow-auth-change", sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, [pathname]);
   const signedIn = Boolean(auth?.token);
 
   const links = [

@@ -42,13 +42,13 @@ export default function LoginPage() {
       >
         <h1 className="font-display text-3xl font-semibold text-center">{t("auth.loginTitle")}</h1>
         <p className="mt-2 text-center text-sm text-muted-foreground">
-          Your space is exactly as you left it.
+          {t("auth.loginSubtitle")}
         </p>
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-5">
           <div>
             <label htmlFor="email" className="text-xs font-medium text-muted-foreground">
-              Email
+              {t("auth.email")}
             </label>
             <input
               id="email"
@@ -63,7 +63,7 @@ export default function LoginPage() {
 
           <div>
             <label htmlFor="password" className="text-xs font-medium text-muted-foreground">
-              Password
+              {t("auth.password")}
             </label>
             <input
               id="password"
@@ -78,19 +78,25 @@ export default function LoginPage() {
 
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
 
+          <p className="text-center text-sm">
+            <Link href="/forgot-password" className="underline underline-offset-4 text-primary hover:text-foreground">
+              {t("auth.forgotPassword")}
+            </Link>
+          </p>
+
           <button
             type="submit"
             disabled={busy}
             className="aurora halo w-full rounded-full px-8 py-4 text-sm font-medium text-primary-foreground transition-transform hover:scale-[1.01] disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {busy && <Loader2 className="size-4 animate-spin" />}
-            Sign in
+            {t("auth.signIn")}
           </button>
 
           <p className="text-center text-sm text-muted-foreground">
-            New to Glow?{" "}
+            {t("auth.noAccount")}{" "}
             <Link href="/register" className="underline underline-offset-4 hover:text-foreground">
-              Create an account
+              {t("auth.createAccount")}
             </Link>
           </p>
         </form>

@@ -96,23 +96,29 @@ async def _get_session_record(db: AsyncSession, session_id: str, user_id: str):
     return result.scalar_one_or_none()
 
 
-def _decrypt_messages(db: AsyncSession, session_record_id: int, consent: ConsentRecord):
+async def _decrypt_messages(
+    db: AsyncSession, session_record_id: int, consent: ConsentRecord
+) -> list[dict[str, str]]:
     """Decrypt all messages for a session. Returns list of {role, content}."""
     from glow_api.models import SessionMessageModel
+
     if not consent.transcript_retention:
         return []
 
-    stmt = select(SessionMessageModel).where(
-        SessionMessageModel.session_record_id == session_record_id
-    ).order_by(SessionMessageModel.timestamp.asc())
-    result = db.execute(stmt)
+    stmt = (
+        select(SessionMessageModel)
+        .where(SessionMessageModel.session_record_id == session_record_id)
+        .order_by(SessionMessageModel.timestamp.asc())
+    )
+    result = await db.execute(stmt)
     messages = result.scalars().all()
 
-    decrypted = []
+    decrypted: list[dict[str, str]] = []
     for m in messages:
         key = kms_service.get_master_key(m.key_id)
-        nonce = m.encrypted_content[:12]
-        ciphertext = m.encrypted_content[12:]
+        blob = m.encrypted_content
+        nonce = blob[:12]
+        ciphertext = blob[12:]
         try:
             content = EnvelopeEncryption.decrypt(key, nonce, ciphertext).decode("utf-8")
             decrypted.append({"role": m.role, "content": content})
@@ -130,12 +136,17 @@ def _generate_mood_label(mood: int | None) -> str:
 
 def _generate_doctor_prep(session_record, messages: list[dict[str, str]], mood_before: int | None, mood_after: int | None) -> str:
     """Generate a doctor-ready plain text summary from session data."""
-    from glow_api.models import SessionRecordModel
 
     date_str = session_record.started_at.isoformat() if session_record.started_at else "Unknown"
     duration = None
     if session_record.started_at and session_record.closed_at:
-        duration = int((session_record.closed_at - session_record.started_at).total_seconds() / 60)
+        start_dt = session_record.started_at
+        end_dt = session_record.closed_at
+        if start_dt.tzinfo is None:
+            start_dt = start_dt.replace(tzinfo=UTC)
+        if end_dt.tzinfo is None:
+            end_dt = end_dt.replace(tzinfo=UTC)
+        duration = max(0, int((end_dt - start_dt).total_seconds() / 60))
 
     preview = ""
     if messages:
@@ -187,14 +198,16 @@ async def record_mood(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Store mood on the session record (no dedicated column yet — use JSON extra_metadata)
-    # For now, store in extra_metadata
-    session.extra_metadata = session.extra_metadata or {}
-    key = f"mood_{request.when}"
-    session.extra_metadata[key] = request.mood
-    session.extra_metadata["mood_updated_at"] = datetime.now(UTC).isoformat()
-    db.add(session)
-    await db.flush()
+    # SessionRecordModel currently has no JSON metadata column in this schema.
+    # Persist mood defensively if metadata becomes available; otherwise accept
+    # the rating without breaking the session flow.
+    extra = getattr(session, "extra_metadata", None)
+    if isinstance(extra, dict):
+        extra[f"mood_{request.when}"] = request.mood
+        extra["mood_updated_at"] = datetime.now(UTC).isoformat()
+        session.extra_metadata = extra
+        db.add(session)
+        await db.flush()
 
     return MoodResponse(
         session_id=session_id,
@@ -211,10 +224,7 @@ async def get_session_history(
     search: str | None = Query(None, description="Optional search query"),
 ) -> SessionHistoryResponse:
     """Return the user's session history, most recent first."""
-    from glow_api.models import SessionRecordModel
-
-    # Look up the user's integer DB id from the users table
-    from glow_api.models import UserAccountModel
+    from glow_api.models import SessionRecordModel, UserAccountModel
 
     uid_row = await db.execute(
         select(UserAccountModel.id).where(UserAccountModel.user_id == user.user_id)
@@ -223,35 +233,43 @@ async def get_session_history(
     if db_user_id is None:
         return SessionHistoryResponse(sessions=[], total=0)
 
-    stmt = select(SessionRecordModel).where(
-        SessionRecordModel.user_account_id == db_user_id
-    ).order_by(SessionRecordModel.started_at.desc())
-    result = db.execute(stmt)
+    stmt = (
+        select(SessionRecordModel)
+        .where(SessionRecordModel.user_account_id == db_user_id)
+        .order_by(SessionRecordModel.started_at.desc())
+    )
+    result = await db.execute(stmt)
     sessions = result.scalars().all()
 
-    entries = []
+    entries: list[SessionHistoryEntry] = []
     for s in sessions:
-        # Apply search filter if provided
+        started = s.started_at.isoformat() if s.started_at else ""
+        extra = getattr(s, "extra_metadata", None) or {}
         if search:
-            preview = s.extra_metadata.get("last_preview", "") if s.extra_metadata else ""
-            if search.lower() not in (s.session_id.lower() + s.started_at.isoformat().lower() + preview.lower()):
+            preview = extra.get("last_preview", "") if isinstance(extra, dict) else ""
+            haystack = f"{s.session_id} {started} {preview}".lower()
+            if search.lower() not in haystack:
                 continue
 
-        mood_before = s.extra_metadata.get("mood_before") if s.extra_metadata else None
-        mood_after = s.extra_metadata.get("mood_after") if s.extra_metadata else None
+        mood_before = extra.get("mood_before") if isinstance(extra, dict) else None
+        mood_after = extra.get("mood_after") if isinstance(extra, dict) else None
 
         duration = None
         if s.started_at and s.closed_at:
-            duration = int((s.closed_at - s.started_at).total_seconds() / 60)
+            start_dt = s.started_at.replace(tzinfo=UTC) if s.started_at.tzinfo is None else s.started_at
+            end_dt = s.closed_at.replace(tzinfo=UTC) if s.closed_at.tzinfo is None else s.closed_at
+            duration = max(0, int((end_dt - start_dt).total_seconds() / 60))
 
-        entries.append(SessionHistoryEntry(
-            session_id=s.session_id,
-            date=s.started_at.isoformat()[:10] if s.started_at else "Unknown",
-            duration_minutes=duration,
-            mood_before=mood_before,
-            mood_after=mood_after,
-            preview=s.extra_metadata.get("last_preview") if s.extra_metadata else None,
-        ))
+        entries.append(
+            SessionHistoryEntry(
+                session_id=s.session_id,
+                date=started[:10] if started else "Unknown",
+                duration_minutes=duration,
+                mood_before=mood_before,
+                mood_after=mood_after,
+                preview=extra.get("last_preview") if isinstance(extra, dict) else None,
+            )
+        )
 
     return SessionHistoryResponse(sessions=entries, total=len(entries))
 
@@ -263,7 +281,13 @@ async def get_session_summary(
     db: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> SummaryResponse:
     """Return decrypted transcript for a session (requires transcript_retention consent)."""
-    from glow_api.models import UserAccountModel, ConsentRecordModel
+    from glow_api.models import ConsentRecordModel
+
+    session = await _get_session_record(db, session_id, user.user_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    from glow_api.models import UserAccountModel
 
     user_row = await db.execute(
         select(UserAccountModel).where(UserAccountModel.user_id == user.user_id)
@@ -282,12 +306,18 @@ async def get_session_summary(
     if not consent_model:
         raise HTTPException(status_code=403, detail="No consent on file")
 
+    recorded_at = consent_model.recorded_at
+    if recorded_at.tzinfo is None:
+        recorded_at = recorded_at.replace(tzinfo=UTC)
     consent = ConsentRecord(
         user_id=user.user_id,
         record_version=consent_model.record_version,
-        recorded_at=consent_model.recorded_at,
+        recorded_at=recorded_at,
         policy_version=consent_model.policy_version,
         locale_presented=consent_model.locale_presented,
+        expected_verification_method=getattr(
+            consent_model, "expected_verification_method", "jwt_bearer"
+        ),
         service_use=consent_model.service_use,
         transcript_retention=consent_model.transcript_retention,
         audio_storage=consent_model.audio_storage,
@@ -298,11 +328,7 @@ async def get_session_summary(
         memory_consent=getattr(consent_model, "memory_consent", False),
     )
 
-    session = _get_session_record(db, session_id, user_model.id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    messages = _decrypt_messages(db, session.id, consent)
+    messages = await _decrypt_messages(db, session.id, consent)
     return SummaryResponse(
         session_id=session_id,
         messages=messages,
@@ -338,15 +364,20 @@ async def generate_doctor_prep(
     )
     consent_model = consent_row.scalar_one_or_none()
     consent = None
-    messages = []
+    messages: list[dict[str, str]] = []
     if consent_model:
+        recorded_at = consent_model.recorded_at
+        if recorded_at.tzinfo is None:
+            recorded_at = recorded_at.replace(tzinfo=UTC)
         consent = ConsentRecord(
             user_id=user.user_id,
             record_version=consent_model.record_version,
-            recorded_at=consent_model.recorded_at,
+            recorded_at=recorded_at,
             policy_version=consent_model.policy_version,
             locale_presented=consent_model.locale_presented,
-            expected_verification_method=getattr(consent_model, "expected_verification_method", "jwt_bearer"),
+            expected_verification_method=getattr(
+                consent_model, "expected_verification_method", "jwt_bearer"
+            ),
             service_use=consent_model.service_use,
             transcript_retention=consent_model.transcript_retention,
             audio_storage=consent_model.audio_storage,
@@ -356,10 +387,11 @@ async def generate_doctor_prep(
             research_and_model_improvement=consent_model.research_and_model_improvement,
             memory_consent=getattr(consent_model, "memory_consent", False),
         )
-        messages = _decrypt_messages(db, session.id, consent)
+        messages = await _decrypt_messages(db, session.id, consent)
 
-    mood_before = session.extra_metadata.get("mood_before") if session.extra_metadata else None
-    mood_after = session.extra_metadata.get("mood_after") if session.extra_metadata else None
+    extra = getattr(session, "extra_metadata", None) or {}
+    mood_before = extra.get("mood_before") if isinstance(extra, dict) else None
+    mood_after = extra.get("mood_after") if isinstance(extra, dict) else None
 
     prep_text = _generate_doctor_prep(session, messages, mood_before, mood_after)
     return DoctorPrepResponse(

@@ -12,7 +12,7 @@ from __future__ import annotations
 import datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Integer, LargeBinary, String
+from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Integer, LargeBinary, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from glow_api.database import Base
@@ -58,6 +58,25 @@ class UserAccountModel(Base):
     diagnosis_note_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary(), nullable=True)
     diagnosis_key_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
+    # Sign-up intake (user-declared). Gender is stored as a plain code
+    # (female|male|non_binary|prefer_not_to_say); age gates the adults-only
+    # product (validated 18+ at registration, nullable for legacy rows).
+    gender: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    age: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Optional medication disclosure, envelope-encrypted like the diagnosis
+    # note, user-controlled and revocable. Never plaintext.
+    medications_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary(), nullable=True)
+    medications_key_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    email_verified_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    tokens: Mapped[list["AuthTokenModel"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+
     preferences: Mapped[UserPreferencesModel] = relationship(
         back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
@@ -81,6 +100,28 @@ class UserPreferencesModel(Base):
     preferred_session_minutes: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
 
     user: Mapped[UserAccountModel] = relationship(back_populates="preferences")
+
+
+class AuthTokenModel(Base):
+    """Single-use auth tokens (email verification, password reset).
+
+    Only a SHA-256 hash of the token is stored; the raw token travels in the
+    email link and is never persisted.
+    """
+
+    __tablename__ = "auth_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_account_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    kind: Mapped[str] = mapped_column(String(24), nullable=False)  # verify_email | password_reset
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    expires_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    user: Mapped[UserAccountModel] = relationship(back_populates="tokens")
 
 
 class ConsentRecordModel(Base):
@@ -156,9 +197,12 @@ class MoodEntryModel(Base):
     user_account_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
     )
-    # UTC ISO date (YYYY-MM-DD) of the check-in; one per user per day.
+    # UTC ISO date (YYYY-MM-DD) of the check-in. Multiple check-ins per day
+    # are allowed so people can log different emotions as the day changes.
     day_utc: Mapped[str] = mapped_column(String(10), nullable=False)
     mood: Mapped[int] = mapped_column(Integer, nullable=False)  # 1..7
+    # JSON array of emotion labels for this moment (e.g. ["calm","tired"]).
+    emotions_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     note: Mapped[str | None] = mapped_column(String(280), nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 

@@ -19,6 +19,10 @@ type Profile = {
   created_at: string;
   diagnosis_disclosed: boolean;
   diagnosis_note: string | null;
+  age: number | null;
+  gender: string | null;
+  medications_disclosed: boolean;
+  medications: string | null;
   free_sessions_remaining: number;
 };
 
@@ -29,6 +33,8 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [editingDiagnosis, setEditingDiagnosis] = useState(false);
   const [noteDraft, setNoteDraft] = useState("");
+  const [editingMedications, setEditingMedications] = useState(false);
+  const [medicationsDraft, setMedicationsDraft] = useState("");
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -62,6 +68,30 @@ export default function ProfilePage() {
     }
   };
 
+  const saveMedications = async (value?: string) => {
+    setSaving(true);
+    try {
+      await authFetch("/profile/medications", {
+        method: "PUT",
+        json: { medications: value ?? null },
+      });
+      await load();
+      setEditingMedications(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const genderLabel = (gender: string | null) => {
+    switch (gender) {
+      case "female": return t("auth.genderFemale");
+      case "male": return t("auth.genderMale");
+      case "non_binary": return t("auth.genderNonBinary");
+      case "prefer_not_to_say": return t("auth.genderPreferNotToSay");
+      default: return t("auth.genderPreferNotToSay");
+    }
+  };
+
   if (loading) {
     return (
       <main className="flex-1 flex items-center justify-center">
@@ -78,13 +108,13 @@ export default function ProfilePage() {
         </span>
         <h1 className="font-display text-3xl font-semibold">{t("profile.title")}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {profile?.display_name ? `Hi, ${profile.display_name}` : "Your private settings"}
+          {profile?.display_name ?? t("profile.privateSettings")}
         </p>
       </div>
 
       {/* Account summary */}
       <section className="glass rounded-3xl p-6 space-y-3">
-        <h2 className="font-display font-semibold">Account</h2>
+        <h2 className="font-display font-semibold">{t("profile.account")}</h2>
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">{t("profile.memberSince")}</span>
           <span>{profile && new Date(profile.created_at).toLocaleDateString()}</span>
@@ -92,6 +122,14 @@ export default function ProfilePage() {
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">{t("profile.freeSessions")}</span>
           <span>{profile?.free_sessions_remaining}</span>
+        </div>
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">{t("auth.ageLabel")}</span>
+          <span>{profile?.age ?? "—"}</span>
+        </div>
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">{t("auth.genderLabel")}</span>
+          <span>{genderLabel(profile?.gender ?? null)}</span>
         </div>
       </section>
 
@@ -102,9 +140,7 @@ export default function ProfilePage() {
           <div>
             <h2 className="font-display font-semibold">{t("profile.diagnosisTitle")}</h2>
             <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-              Optional. If a professional has diagnosed you with something,
-              sharing it helps Glow be more informed — but it never changes how
-              much you&apos;re supported.
+              {t("profile.diagnosisDesc")}
             </p>
           </div>
         </div>
@@ -114,7 +150,7 @@ export default function ProfilePage() {
             <p className="glass-soft rounded-xl px-4 py-3 text-sm whitespace-pre-wrap">
               {profile?.diagnosis_disclosed
                 ? profile.diagnosis_note || t("profile.sharingNoDetails")
-                : "Not shared"}
+                : t("profile.notShared")}
             </p>
             <div className="flex gap-3">
               <button
@@ -124,7 +160,7 @@ export default function ProfilePage() {
                 }}
                 className="aurora rounded-full px-5 py-2.5 text-xs font-medium text-primary-foreground"
               >
-                {profile?.diagnosis_disclosed ? "Edit" : "Share something"}
+                {profile?.diagnosis_disclosed ? t("profile.edit") : t("profile.shareSomething")}
               </button>
               {profile?.diagnosis_disclosed && (
                 <button
@@ -132,7 +168,7 @@ export default function ProfilePage() {
                   disabled={saving}
                   className="glass-soft rounded-full px-5 py-2.5 text-xs"
                 >
-                  Remove & wipe note
+                  {t("profile.removeWipe")}
                 </button>
               )}
             </div>
@@ -144,7 +180,7 @@ export default function ProfilePage() {
               onChange={(e) => setNoteDraft(e.target.value)}
               maxLength={2000}
               rows={3}
-              placeholder="Only what you&apos;re comfortable sharing…"
+              placeholder={t("auth.diagnosis.placeholder")}
               className="w-full glass-soft rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
             <div className="flex gap-3">
@@ -154,13 +190,13 @@ export default function ProfilePage() {
                 className="aurora rounded-full px-5 py-2.5 text-xs font-medium text-primary-foreground flex items-center gap-2"
               >
                 {saving && <Loader2 className="size-3.5 animate-spin" />}
-                Save
+                {t("profile.save")}
               </button>
               <button
                 onClick={() => setEditingDiagnosis(false)}
                 className="glass-soft rounded-full px-5 py-2.5 text-xs"
               >
-                Cancel
+                {t("profile.cancel")}
               </button>
             </div>
           </div>
@@ -168,8 +204,82 @@ export default function ProfilePage() {
 
         <p className="flex items-start gap-2 text-[11px] text-muted-foreground/80">
           <ShieldCheck className="size-3.5 mt-0.5 shrink-0" />
-          Encrypted at rest · visible only to you · never used to diagnose ·
-          removing wipes the stored note entirely.
+          {t("profile.diagnosisFooter")}
+        </p>
+      </section>
+
+      {/* Medication disclosure */}
+      <section className="glass rounded-3xl p-6 space-y-4">
+        <div className="flex items-start gap-3">
+          <Heart className="size-5 mt-0.5 shrink-0 text-primary" />
+          <div>
+            <h2 className="font-display font-semibold">{t("profile.medicationTitle")}</h2>
+            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+              {t("profile.medicationDesc")}
+            </p>
+          </div>
+        </div>
+
+        {!editingMedications ? (
+          <div className="space-y-3">
+            <p className="glass-soft rounded-xl px-4 py-3 text-sm whitespace-pre-wrap">
+              {profile?.medications_disclosed
+                ? profile.medications || t("profile.sharingNoDetails")
+                : t("profile.notShared")}
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setMedicationsDraft(profile?.medications ?? "");
+                  setEditingMedications(true);
+                }}
+                className="aurora rounded-full px-5 py-2.5 text-xs font-medium text-primary-foreground"
+              >
+                {profile?.medications_disclosed ? t("profile.edit") : t("profile.shareSomething")}
+              </button>
+              {profile?.medications_disclosed && (
+                <button
+                  onClick={() => saveMedications("")}
+                  disabled={saving}
+                  className="glass-soft rounded-full px-5 py-2.5 text-xs"
+                >
+                  {t("profile.removeWipe")}
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <textarea
+              value={medicationsDraft}
+              onChange={(e) => setMedicationsDraft(e.target.value)}
+              maxLength={1000}
+              rows={2}
+              placeholder={t("auth.medicationPlaceholder")}
+              className="w-full glass-soft rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => saveMedications(medicationsDraft)}
+                disabled={saving}
+                className="aurora rounded-full px-5 py-2.5 text-xs font-medium text-primary-foreground flex items-center gap-2"
+              >
+                {saving && <Loader2 className="size-3.5 animate-spin" />}
+                {t("profile.save")}
+              </button>
+              <button
+                onClick={() => setEditingMedications(false)}
+                className="glass-soft rounded-full px-5 py-2.5 text-xs"
+              >
+                {t("profile.cancel")}
+              </button>
+            </div>
+          </div>
+        )}
+
+        <p className="flex items-start gap-2 text-[11px] text-muted-foreground/80">
+          <ShieldCheck className="size-3.5 mt-0.5 shrink-0" />
+          {t("profile.medicationHint")}
         </p>
       </section>
     </main>

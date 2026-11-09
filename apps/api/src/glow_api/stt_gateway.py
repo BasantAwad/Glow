@@ -148,6 +148,55 @@ _CPU_ONLY_CHAIN = [
 ]
 
 
+def _decode_to_16k_float32(audio_bytes: bytes):
+    """Decode container/PCM audio to 16 kHz mono float32 samples.
+
+    Gets called directly instead of faster-whisper's decode_audio(), whose
+    `av.open(..., metadata_errors=...)` call is incompatible with PyAV>=15 —
+    feeding WhisperModel a float32 array avoids the broken path entirely.
+    """
+    import io
+
+    import av  # PyAV
+
+    resampler = av.audio.resampler.AudioResampler(
+        format="s16", layout="mono", rate=16000
+    )
+
+    # If the input is already raw 16 kHz s16le PCM (the voice WebSocket path
+    # sends WAV-wrapped PCM), a quick path detects WAV header first.
+    if audio_bytes[:4] == b"RIFF" and audio_bytes[8:12] == b"WAVE":
+        import wave
+
+        with wave.open(io.BytesIO(audio_bytes), "rb") as wav:
+            frames = wav.readframes(wav.getnframes())
+            rate = wav.getframerate()
+        if rate == 16000:
+            import numpy as np
+
+            return np.frombuffer(frames, dtype=np.int16).astype("float32") / 32768.0
+
+    raw_buffer = io.BytesIO()
+    dtype = None
+    with av.open(io.BytesIO(audio_bytes), mode="r") as container:
+        stream = container.streams.audio[0]
+        for frame in container.decode(stream):
+            for resampled in resampler.resample(frame):
+                array = resampled.to_ndarray()
+                dtype = array.dtype
+                raw_buffer.write(array)
+
+    import gc
+
+    del resampler
+    gc.collect()
+
+    import numpy as np
+
+    audio = np.frombuffer(raw_buffer.getbuffer(), dtype=dtype)
+    return audio.astype("float32") / 32768.0
+
+
 def _load_whisper_with_fallback(preferred_model: str, preferred_device: str, preferred_compute: str):
     """
     Attempt to load faster-whisper with the preferred configuration, falling back
@@ -263,12 +312,15 @@ class FasterWhisperSttGateway(SttGateway):
 
         def _transcribe_sync() -> tuple[str, float, str | None]:
             model = self._get_model()
-            audio_io = io.BytesIO(request.audio_chunk)
+
+            # PyAV-decoded float32 samples bypass faster-whisper's
+            # container decode (broken on PyAV>=15).
+            audio = _decode_to_16k_float32(request.audio_chunk)
 
             # NOTE: faster-whisper's .transcribe() returns a generator for segments.
             # The generator MUST be consumed exactly once. Do not iterate it twice.
             segments_gen, info = model.transcribe(
-                audio_io,
+                audio,
                 language=request.language,
                 beam_size=5,
             )

@@ -25,51 +25,6 @@ configure_logging()
 logger = logging.getLogger("glow_api")
 
 
-def _init_database() -> None:
-    """Initialize the database engine and create tables when available."""
-    db_manager.initialize()
-    if db_manager._engine is None:
-        logger.warning(
-            "Database engine NOT initialized — GLOW_DATABASE_URL may be unset. "
-            "DB-dependent endpoints will return 503."
-        )
-        return
-
-    logger.info("Database engine initialized (%s)", db_manager._engine.url)
-    try:
-        import asyncio as _asyncio
-
-        loop = _asyncio.get_event_loop()
-    except RuntimeError:
-        loop = _asyncio.new_event_loop()
-        _asyncio.set_event_loop(loop)
-
-    if loop.is_running():
-
-        def _deferred_create() -> None:
-            from glow_api.database import Base
-            import asyncio as _a
-
-            async def _create() -> None:
-                async with db_manager._engine.begin() as conn:
-                    await conn.run_sync(Base.metadata.create_all)
-
-            _a.create_task(_create())
-
-        loop.call_soon_threadsafe(_deferred_create)
-        logger.info("Database tables creation deferred to running event loop")
-        return
-
-    async def _create_tables() -> None:
-        from glow_api.database import Base
-
-        async with db_manager._engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-
-    loop.run_until_complete(_create_tables())
-    logger.info("Database tables verified/created")
-
-
 class HealthResponse(BaseModel):
     """Public, non-sensitive process health response."""
 
@@ -78,26 +33,88 @@ class HealthResponse(BaseModel):
     environment: str
 
 
+def _cors_origins(settings: Settings) -> list[str]:
+    """Resolve allowed browser origins.
+
+    Credentials cannot be used with a wildcard origin, so development defaults to
+    common local web origins. Production requires explicit configuration.
+    """
+    if settings.cors_origins:
+        return [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+    if settings.environment == "production":
+        return []
+    return [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+    ]
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
-    """Create the API without connecting to any data, model, or safety provider."""
+    """Create the API application."""
 
     active_settings = settings or get_settings()
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         db_manager.initialize()
+        await db_manager.configure_sqlite()
         await _ensure_tables()
         yield
         await db_manager.close()
 
     async def _ensure_tables() -> None:
-        """Create tables synchronously after engine init."""
+        """Create tables after engine init.
+
+        This is a local/dev convenience. Production and controlled pilots should
+        use Alembic migrations as the source of truth.
+        """
         if db_manager._engine is None:
             logger.warning("No DB engine — skipping table creation")
             return
         from glow_api.database import Base
+
         async with db_manager._engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+
+            # Lightweight forward-compatible migration for local/dev SQLite and
+            # pilot Postgres databases. Production should still use Alembic.
+            def _ensure_wellness_columns(sync_conn) -> None:
+                from sqlalchemy import inspect, text
+
+                inspector = inspect(sync_conn)
+                if "mood_entries" not in inspector.get_table_names():
+                    return
+                columns = {c["name"] for c in inspector.get_columns("mood_entries")}
+                if "emotions_json" not in columns:
+                    sync_conn.execute(
+                        text("ALTER TABLE mood_entries ADD COLUMN emotions_json TEXT")
+                    )
+
+                if "users" in inspector.get_table_names():
+                    user_columns = {c["name"] for c in inspector.get_columns("users")}
+                    blob_type = "BYTEA" if sync_conn.dialect.name == "postgresql" else "BLOB"
+                    for column, ddl in (
+                        ("gender", "ALTER TABLE users ADD COLUMN gender VARCHAR(20)"),
+                        ("age", "ALTER TABLE users ADD COLUMN age INTEGER"),
+                        (
+                            "medications_encrypted",
+                            f"ALTER TABLE users ADD COLUMN medications_encrypted {blob_type}",
+                        ),
+                        (
+                            "medications_key_id",
+                            "ALTER TABLE users ADD COLUMN medications_key_id VARCHAR(64)",
+                        ),
+                        (
+                            "email_verified_at",
+                            "ALTER TABLE users ADD COLUMN email_verified_at TIMESTAMPTZ",
+                        ),
+                    ):
+                        if column not in user_columns:
+                            sync_conn.execute(text(ddl))
+
+            await conn.run_sync(_ensure_wellness_columns)
         logger.info("Database tables created/verified")
 
     app = FastAPI(
@@ -109,12 +126,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
 
+    origins = _cors_origins(active_settings)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=origins,
+        allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?$"
+        if active_settings.environment != "production" and not origins
+        else None,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
     )
 
     @app.get("/healthz", response_model=HealthResponse, include_in_schema=False)

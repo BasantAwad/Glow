@@ -1,12 +1,16 @@
 /**
  * Glow auth store — client side of the credential flow.
  *
- * Token is kept in memory + sessionStorage (cleared when the browser tab
- * closes) rather than localStorage, to shorten the window an XSS could
- * exploit. The backend remains the sole authority for all decisions.
+ * The backend remains the sole authority for all decisions. This store keeps
+ * a bearer token for API compatibility and also works with HttpOnly auth
+ * cookies (sent automatically with credentials included).
+ *
+ * Tokens are persisted in localStorage so users do not lose their session on a
+ * normal browser restart while the token is still valid. Legacy sessionStorage
+ * values are migrated on read.
  */
 
-import { apiFetch, API_BASE, getApiErrorMessage } from "./glow-api";
+import { apiFetch, API_BASE } from "./glow-api";
 
 const TOKEN_KEY = "glow.auth.token";
 const USER_KEY = "glow.auth.userId";
@@ -20,11 +24,14 @@ export type AuthState = {
 
 export function getStoredAuth(): AuthState {
   if (typeof window === "undefined") return { token: null, userId: null, displayName: null };
-  return {
-    token: sessionStorage.getItem(TOKEN_KEY),
-    userId: sessionStorage.getItem(USER_KEY),
-    displayName: sessionStorage.getItem(NAME_KEY),
-  };
+  const token = localStorage.getItem(TOKEN_KEY) ?? sessionStorage.getItem(TOKEN_KEY);
+  const userId = localStorage.getItem(USER_KEY) ?? sessionStorage.getItem(USER_KEY);
+  const displayName = localStorage.getItem(NAME_KEY) ?? sessionStorage.getItem(NAME_KEY);
+  // Migrate legacy session-only auth to persistent local storage.
+  if (token && !localStorage.getItem(TOKEN_KEY)) localStorage.setItem(TOKEN_KEY, token);
+  if (userId && !localStorage.getItem(USER_KEY)) localStorage.setItem(USER_KEY, userId);
+  if (displayName && !localStorage.getItem(NAME_KEY)) localStorage.setItem(NAME_KEY, displayName);
+  return { token, userId, displayName };
 }
 
 export function setStoredAuth(auth: AuthState): void {
@@ -32,15 +39,34 @@ export function setStoredAuth(auth: AuthState): void {
     clearStoredAuth();
     return;
   }
-  sessionStorage.setItem(TOKEN_KEY, auth.token);
-  sessionStorage.setItem(USER_KEY, auth.userId);
-  if (auth.displayName) sessionStorage.setItem(NAME_KEY, auth.displayName);
-}
-
-export function clearStoredAuth(): void {
+  localStorage.setItem(TOKEN_KEY, auth.token);
+  localStorage.setItem(USER_KEY, auth.userId);
+  if (auth.displayName) localStorage.setItem(NAME_KEY, auth.displayName);
   sessionStorage.removeItem(TOKEN_KEY);
   sessionStorage.removeItem(USER_KEY);
   sessionStorage.removeItem(NAME_KEY);
+  notifyAuthChange();
+}
+
+export function clearStoredAuth(): void {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(NAME_KEY);
+  sessionStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(USER_KEY);
+  sessionStorage.removeItem(NAME_KEY);
+  notifyAuthChange();
+  // Best-effort server cookie clear; ignore failures.
+  void fetch(`${API_BASE}/auth/logout`, {
+    method: "POST",
+    credentials: "include",
+  }).catch(() => undefined);
+}
+
+function notifyAuthChange(): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("glow-auth-change"));
+  }
 }
 
 export type RegisterInput = {
@@ -51,11 +77,15 @@ export type RegisterInput = {
   diagnosis_disclosed: boolean;
   diagnosis_note?: string;
   locale?: string;
+  age: number;
+  gender: "female" | "male" | "non_binary" | "prefer_not_to_say";
+  medications?: string;
 };
 
 export async function apiRegister(input: RegisterInput): Promise<AuthState> {
   const res = await apiFetch(`${API_BASE}/auth/register`, {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
@@ -82,6 +112,7 @@ export async function apiRegister(input: RegisterInput): Promise<AuthState> {
 export async function apiLogin(email: string, password: string): Promise<AuthState> {
   const res = await apiFetch(`${API_BASE}/auth/login`, {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
@@ -105,7 +136,7 @@ export async function apiLogin(email: string, password: string): Promise<AuthSta
   return auth;
 }
 
-/** Authenticated fetch helper. Throws on 401 so pages can redirect to /login. */
+/** Authenticated fetch helper. Sends bearer token when available and includes cookies. */
 export async function authFetch(
   path: string,
   init?: RequestInit & { json?: unknown },
@@ -120,5 +151,10 @@ export async function authFetch(
     headers["Content-Type"] = "application/json";
     body = JSON.stringify(init.json);
   }
-  return fetch(`${API_BASE}${path}`, { ...init, headers, body });
+  return fetch(`${API_BASE}${path}`, {
+    ...init,
+    credentials: init?.credentials ?? "include",
+    headers,
+    body,
+  });
 }

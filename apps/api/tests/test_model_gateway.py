@@ -57,6 +57,7 @@ async def test_open_weights_gateway_does_not_fallback_on_unreachable():
 
 def test_model_gateway_factory_does_not_select_local_model_automatically(monkeypatch):
     monkeypatch.setattr(settings, "llm_api_base", None)
+    monkeypatch.setattr(settings, "llm_local_fallback_enabled", False)
 
     assert isinstance(get_model_gateway(), UnconfiguredModelGateway)
 
@@ -64,6 +65,7 @@ def test_model_gateway_factory_does_not_select_local_model_automatically(monkeyp
 @pytest.mark.asyncio
 async def test_unconfigured_model_gateway_fails_clearly(monkeypatch):
     monkeypatch.setattr(settings, "llm_api_base", None)
+    monkeypatch.setattr(settings, "llm_local_fallback_enabled", False)
     gateway = get_model_gateway()
     request = GenerationRequest(
         session_id="test_unconfigured",
