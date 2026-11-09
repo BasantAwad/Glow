@@ -80,9 +80,10 @@
 
 | Item | Status |
 |---|---|
-| `evidence.py` — evidence registry interface | ✅ IMPLEMENTED |
+| `evidence.py` — DB-backed BM25-style lexical retrieval, curator-only ingestion, prompt context and citations | ✅ IMPLEMENTED |
 | `EvidenceEntryModel` (ORM model) | ✅ IMPLEMENTED |
-| Vector embeddings via pgvector | 🔴 BLOCKED — requires PostgreSQL + pgvector |
+| Approved knowledge corpus | 🔴 BLOCKED — remains empty pending source-rights verification and qualified clinical review |
+| Semantic embeddings / pgvector search | 🔴 NOT IMPLEMENTED — lexical retrieval is the current baseline |
 | Semantic memory / vector search | 🔴 BLOCKED — requires PostgreSQL + pgvector |
 
 ---

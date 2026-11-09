@@ -12,6 +12,7 @@ type ExerciseType =
   | "extended-exhale"
   | "grounding-54321"
   | "body-scan"
+  | "gentle-movement"
   | "soundscape";
 
 type ExerciseState = "idle" | "running" | "paused" | "done";
@@ -80,6 +81,15 @@ const EXERCISES: Exercise[] = [
     bestFor: "Physical tension, end-of-day decompression",
     icon: "🧘",
     color: "from-purple-500/20 to-pink-500/10",
+  },
+  {
+    id: "gentle-movement",
+    title: "Gentle Movement",
+    duration: "5 min · optional",
+    desc: "A slow, choice-led sequence of easy seated or standing movements. Skip or rest whenever you like.",
+    bestFor: "A gentle movement break",
+    icon: "🌱",
+    color: "from-lime-500/20 to-emerald-500/10",
   },
   {
     id: "soundscape",
@@ -635,6 +645,140 @@ function SoundscapeExercise() {
 }
 
 /* ---------------------------------------------------------------------------
+ * 5. Optional, beginner-friendly movement sequence
+ * --------------------------------------------------------------------------- */
+
+const MOVEMENT_STEPS = [
+  {
+    title: "Arrive and settle",
+    guidance: "Sit or stand in a stable position. Let your shoulders rest and breathe naturally—there is no need to change your breath.",
+    alternative: "Stay seated, or simply imagine settling into the chair.",
+  },
+  {
+    title: "Small shoulder circles",
+    guidance: "If comfortable, make a few small, slow shoulder circles. Keep the movement easy; you can also leave your shoulders still.",
+    alternative: "Move one shoulder at a time, or skip this step.",
+  },
+  {
+    title: "Easy side reach",
+    guidance: "Rest one hand on your lap or a nearby support. Gently reach the other arm upward only as far as comfortable, then return to center.",
+    alternative: "Keep both hands resting and picture a little more space along one side.",
+  },
+  {
+    title: "Seated back movement",
+    guidance: "With hands on your thighs, gently lengthen your spine, then soften back to neutral. Keep the range small and comfortable.",
+    alternative: "Stay still and notice the support beneath you.",
+  },
+  {
+    title: "Ankle and foot movement",
+    guidance: "While seated or holding a stable support, slowly lift and lower your heels or move your feet in a comfortable way.",
+    alternative: "Notice your feet resting on the floor without moving them.",
+  },
+  {
+    title: "Pause and notice",
+    guidance: "Let the movement stop. Notice the chair or floor supporting you, then finish whenever you feel ready.",
+    alternative: "You can end the practice here or take another quiet moment.",
+  },
+];
+
+function GentleMovementExercise() {
+  const [stepIndex, setStepIndex] = useState(0);
+  const [secondsLeft, setSecondsLeft] = useState(30);
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [done, setDone] = useState(false);
+  const step = MOVEMENT_STEPS[stepIndex];
+
+  useEffect(() => {
+    if (!timerRunning) return;
+    const timer = window.setInterval(() => {
+      setSecondsLeft((seconds) => {
+        if (seconds <= 1) {
+          setTimerRunning(false);
+          return 0;
+        }
+        return seconds - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [timerRunning]);
+
+  const moveNext = () => {
+    setTimerRunning(false);
+    if (stepIndex + 1 === MOVEMENT_STEPS.length) {
+      setDone(true);
+      return;
+    }
+    setStepIndex((current) => current + 1);
+    setSecondsLeft(30);
+  };
+
+  const reset = () => {
+    setStepIndex(0);
+    setSecondsLeft(30);
+    setTimerRunning(false);
+    setDone(false);
+  };
+
+  if (done) {
+    return (
+      <div className="glass rounded-3xl p-8 text-center h-full flex flex-col items-center justify-center">
+        <div className="aurora size-20 rounded-full flex items-center justify-center mb-6">
+          <Check className="size-10 text-primary-foreground" />
+        </div>
+        <h3 className="font-display text-2xl font-semibold mb-2">Movement practice finished</h3>
+        <p className="text-muted-foreground text-sm max-w-sm mb-6">
+          Thank you for taking a moment. You could do every step, a few steps, or none at all.
+        </p>
+        <button onClick={reset} className="aurora halo rounded-full px-6 py-3 text-sm font-medium text-primary-foreground">
+          <RotateCcw className="size-4 inline mr-2" />
+          Start again
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="glass rounded-3xl p-6 sm:p-8 h-full flex flex-col justify-between">
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span>Optional movement · Step {stepIndex + 1} of {MOVEMENT_STEPS.length}</span>
+        <span>{secondsLeft > 0 ? `${secondsLeft} sec guide` : "Timer complete"}</span>
+      </div>
+
+      <div className="flex-1 flex flex-col items-center justify-center text-center my-5">
+        <span className="text-5xl mb-4" aria-hidden="true">🌱</span>
+        <h3 className="font-display text-2xl sm:text-3xl font-semibold mb-3">{step.title}</h3>
+        <p className="text-sm text-muted-foreground max-w-md leading-relaxed">{step.guidance}</p>
+        <div className="glass-soft rounded-2xl p-4 mt-5 max-w-md text-left text-xs leading-relaxed text-muted-foreground">
+          <span className="font-medium text-foreground">Seated or still option: </span>{step.alternative}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 mb-5 text-xs leading-relaxed text-muted-foreground" role="note">
+        Keep every movement optional and within a comfortable range. Skip or rest at any time; stop if you feel pain, dizziness, numbness, or uncomfortable breathing. This is general wellbeing guidance, not medical or injury advice.
+      </div>
+
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        <button
+          onClick={() => setTimerRunning((running) => !running)}
+          disabled={secondsLeft === 0}
+          className="aurora halo flex items-center gap-2 rounded-full px-6 py-3 text-sm font-medium text-primary-foreground disabled:opacity-50"
+        >
+          {timerRunning ? <Pause className="size-4" /> : <Play className="size-4" />}
+          {timerRunning ? "Pause gentle timer" : secondsLeft === 0 ? "Timer finished" : "Start gentle timer"}
+        </button>
+        <button onClick={moveNext} className="glass-soft flex items-center gap-2 rounded-full px-5 py-3 text-sm">
+          {stepIndex + 1 === MOVEMENT_STEPS.length ? "Finish" : "Next or skip"}
+          <SkipForward className="size-4" />
+        </button>
+        <button onClick={reset} className="glass-soft rounded-full px-4 py-3 text-sm text-muted-foreground" aria-label="Reset movement practice">
+          <RotateCcw className="size-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------------
  * Main Practices Page
  * --------------------------------------------------------------------------- */
 
@@ -757,6 +901,7 @@ export default function PracticesPage() {
             )}
             {selectedId === "grounding-54321" && <Grounding54321 />}
             {selectedId === "body-scan" && <BodyScanExercise />}
+            {selectedId === "gentle-movement" && <GentleMovementExercise />}
             {selectedId === "soundscape" && <SoundscapeExercise />}
           </div>
         )}

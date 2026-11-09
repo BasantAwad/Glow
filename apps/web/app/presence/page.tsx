@@ -11,33 +11,6 @@ type PresenterMode = "avatar" | "tavus";
 const AVATAR_URL = process.env.NEXT_PUBLIC_GLOW_AVATAR_URL ?? "/avatar.vrm";
 const TAVUS_DEPLOYMENT_ID = process.env.NEXT_PUBLIC_TAVUS_DEPLOYMENT_ID || "6e550748-e56b-43c4-b4a3-80b78e38c1cd";
 
-function encodeWav(samples: Float32Array, sampleRate = 16000): Blob {
-  const buf = new ArrayBuffer(44 + samples.length * 2);
-  const view = new DataView(buf);
-  const writeStr = (o: number, s: string) => {
-    for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i));
-  };
-  writeStr(0, "RIFF");
-  view.setUint32(4, 36 + samples.length * 2, true);
-  writeStr(8, "WAVE");
-  writeStr(12, "fmt ");
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true);
-  view.setUint16(32, 2, true);
-  view.setUint16(34, 16, true);
-  writeStr(36, "data");
-  view.setUint32(40, samples.length * 2, true);
-  let off = 44;
-  for (let i = 0; i < samples.length; i++, off += 2) {
-    const s = Math.max(-1, Math.min(1, samples[i]));
-    view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7fff, true);
-  }
-  return new Blob([view], { type: "audio/wav" });
-}
-
 interface ModeSelectorProps {
   mode: PresenterMode;
   onChange: (m: PresenterMode) => void;
@@ -216,13 +189,47 @@ function AvatarPresenter({ phase: _phase, speaking, onLoaded, onError }: AvatarP
 }
 
 function TavusPresenter({ speaking: _speaking }: { speaking: boolean }) {
+  const [embedStatus, setEmbedStatus] = useState<"loading" | "ready" | "error">("loading");
+
   useEffect(() => {
-    if (TAVUS_DEPLOYMENT_ID && !document.querySelector('script[src="https://unpkg.com/@tavus/embed@latest"]')) {
-      const script = document.createElement("script");
-      script.src = "https://unpkg.com/@tavus/embed@latest";
-      script.async = true;
-      document.body.appendChild(script);
+    let disposed = false;
+    let timeoutId: number | undefined;
+    const scriptUrl = "https://unpkg.com/@tavus/embed@latest";
+    const script = document.querySelector<HTMLScriptElement>(`script[src="${scriptUrl}"]`);
+
+    const markReady = () => {
+      void customElements.whenDefined("tavus-embed").then(() => {
+        if (!disposed) setEmbedStatus("ready");
+      });
+    };
+    const markError = () => {
+      if (!disposed) setEmbedStatus("error");
+    };
+
+    if (customElements.get("tavus-embed")) {
+      void Promise.resolve().then(() => {
+        if (!disposed) setEmbedStatus("ready");
+      });
+      return;
     }
+
+    const embedScript = script ?? document.createElement("script");
+    embedScript.addEventListener("load", markReady, { once: true });
+    embedScript.addEventListener("error", markError, { once: true });
+    timeoutId = window.setTimeout(markError, 15_000);
+
+    if (!script) {
+      embedScript.src = scriptUrl;
+      embedScript.async = true;
+      document.body.appendChild(embedScript);
+    }
+
+    return () => {
+      disposed = true;
+      embedScript.removeEventListener("load", markReady);
+      embedScript.removeEventListener("error", markError);
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+    };
   }, []);
 
   if (!TAVUS_DEPLOYMENT_ID) {
@@ -230,7 +237,7 @@ function TavusPresenter({ speaking: _speaking }: { speaking: boolean }) {
       <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm text-center p-6">
         <div>
           <Video className="size-8 mx-auto mb-3 opacity-40" />
-          <p className="font-medium mb-1">Realistic therapist</p>
+          <p className="font-medium mb-1">Realistic AI video companion</p>
           <p className="opacity-60 text-xs">
             Add <code className="opacity-80">NEXT_PUBLIC_TAVUS_DEPLOYMENT_ID</code> to <code className="opacity-80">.env.local</code> to enable.
           </p>
@@ -242,6 +249,20 @@ function TavusPresenter({ speaking: _speaking }: { speaking: boolean }) {
   return (
     <div className="w-full h-full relative overflow-hidden rounded-3xl">
       <tavus-embed deployment-id={TAVUS_DEPLOYMENT_ID}></tavus-embed>
+      {embedStatus !== "ready" && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 p-6 text-center">
+          {embedStatus === "loading" ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
+              <span>Connecting to the AI video companion…</span>
+            </div>
+          ) : (
+            <p role="status" className="text-sm text-muted-foreground">
+              The video companion could not load. You can switch to voice-only or text chat.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -259,7 +280,8 @@ export default function PresencePage() {
   const streamRef = useRef<MediaStream | null>(null);
   const ctxRef = useRef<AudioContext | null>(null);
   const procRef = useRef<ScriptProcessorNode | null>(null);
-  const chunksRef = useRef<Float32Array[]>([]);
+  const audioPlaybackRef = useRef(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const sessionIdRef = useRef<string | null>(null);
 
   const cleanupRecording = useCallback(() => {
@@ -271,7 +293,14 @@ export default function PresencePage() {
     ctxRef.current = null;
   }, []);
 
-  useEffect(() => () => cleanupRecording(), [cleanupRecording]);
+  useEffect(() => () => {
+    cleanupRecording();
+    audioRef.current?.pause();
+    if (audioRef.current?.src) URL.revokeObjectURL(audioRef.current.src);
+    audioRef.current = null;
+    socketRef.current?.close();
+    socketRef.current = null;
+  }, [cleanupRecording]);
 
   const startListening = useCallback(async () => {
     setError(null);
@@ -311,15 +340,26 @@ export default function PresencePage() {
 
       ws.onopen = () => {
         setPhase("recording");
-        chunksRef.current = [];
+        audioPlaybackRef.current = false;
 
         const ctx = new AudioContext({ sampleRate: 16000 });
         ctxRef.current = ctx;
+        ws.send(JSON.stringify({ type: "audio_config", sample_rate_hz: ctx.sampleRate }));
         const src = ctx.createMediaStreamSource(stream);
         const proc = ctx.createScriptProcessor(4096, 1, 1);
         procRef.current = proc;
-        proc.onaudioprocess = (ev) =>
-          chunksRef.current.push(new Float32Array(ev.inputBuffer.getChannelData(0)));
+        proc.onaudioprocess = (ev) => {
+          if (ws.readyState !== WebSocket.OPEN) return;
+          const samples = ev.inputBuffer.getChannelData(0);
+          const pcm = new ArrayBuffer(samples.length * 2);
+          const view = new DataView(pcm);
+          for (let i = 0; i < samples.length; i++) {
+            const sample = Math.max(-1, Math.min(1, samples[i]));
+            const value = Math.round(sample < 0 ? sample * 0x8000 : sample * 0x7fff);
+            view.setInt16(i * 2, value, true);
+          }
+          ws.send(pcm);
+        };
         src.connect(proc);
         proc.connect(ctx.destination);
       };
@@ -329,25 +369,54 @@ export default function PresencePage() {
           const msg = JSON.parse(event.data) as { type: string; text?: string; message?: string };
           if (msg.type === "llm_reply" && msg.text) {
             setCaptionGlow(msg.text);
-            setPhase("speaking");
+            setPhase("thinking");
+          }
+          if (msg.type === "turn_complete" && !audioPlaybackRef.current) {
+            setPhase("idle");
+            if (socketRef.current === ws) {
+              socketRef.current = null;
+              ws.close();
+            }
           }
           if (msg.type === "stt_error" || msg.type === "error") {
             setError(String(msg.message ?? "Voice error — please try again."));
             setPhase("idle");
+            if (socketRef.current === ws) {
+              socketRef.current = null;
+              ws.close();
+            }
           }
         } else {
           const blob = new Blob([event.data as BlobPart], { type: "audio/wav" });
           const url = URL.createObjectURL(blob);
           const audio = new Audio(url);
-          audio.onplay = () => setSpeaking(true);
+          audioRef.current = audio;
+          audioPlaybackRef.current = true;
+          audio.onplay = () => {
+            setSpeaking(true);
+            setPhase("speaking");
+          };
           audio.onended = () => {
+            audioPlaybackRef.current = false;
+            audioRef.current = null;
             setSpeaking(false);
             URL.revokeObjectURL(url);
             setPhase("idle");
+            if (socketRef.current === ws) {
+              socketRef.current = null;
+              ws.close();
+            }
           };
           audio.play().catch(() => {
+            audioPlaybackRef.current = false;
+            audioRef.current = null;
             setSpeaking(false);
+            URL.revokeObjectURL(url);
             setPhase("idle");
+            if (socketRef.current === ws) {
+              socketRef.current = null;
+              ws.close();
+            }
           });
         }
       };
@@ -356,9 +425,16 @@ export default function PresencePage() {
         setError("Connection error — is the Glow API running?");
         cleanupRecording();
         setPhase("idle");
+        if (socketRef.current === ws) {
+          socketRef.current = null;
+          ws.close();
+        }
       };
       ws.onclose = () => {
-        if (phase !== "idle") setPhase("idle");
+        if (socketRef.current === ws) {
+          socketRef.current = null;
+          setPhase("idle");
+        }
       };
     } catch (err) {
       console.error("[voice]", err);
@@ -370,24 +446,26 @@ export default function PresencePage() {
       }
       setPhase("idle");
     }
-  }, [cleanupRecording, t, phase]);
+  }, [cleanupRecording, t]);
 
   const stopListening = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      URL.revokeObjectURL(audioRef.current.src);
+      audioRef.current = null;
+      audioPlaybackRef.current = false;
+      setSpeaking(false);
+      socketRef.current?.close();
+      socketRef.current = null;
+      setPhase("idle");
+      return;
+    }
     setPhase("thinking");
-    const total = chunksRef.current.reduce((n, c) => n + c.length, 0);
-    if (total > 0 && socketRef.current?.readyState === WebSocket.OPEN) {
-      const merged = new Float32Array(total);
-      let off = 0;
-      for (const c of chunksRef.current) {
-        merged.set(c, off);
-        off += c.length;
-      }
-      socketRef.current.send(encodeWav(merged, 16000));
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify({ type: "flush" }));
     } else {
       setPhase("idle");
     }
-    chunksRef.current = [];
     cleanupRecording();
   }, [cleanupRecording]);
 
@@ -398,7 +476,7 @@ export default function PresencePage() {
     <main className="flex-1 flex flex-col items-center max-w-3xl w-full mx-auto p-4 sm:p-6 lg:p-8">
       <div className="flex flex-col items-center mb-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
         <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-center font-display">
-          {mode === "avatar" ? "Meet your companion" : "Realistic session"}
+          {mode === "avatar" ? "Meet your AI companion" : "AI video companion"}
         </h1>
         <p className="mt-2 text-muted-foreground text-center text-sm">Talk naturally. Captions always on.</p>
       </div>
@@ -411,6 +489,10 @@ export default function PresencePage() {
         }}
         disabled={isActive}
       />
+
+      <p className="mb-4 max-w-sm text-center text-xs text-muted-foreground" role="note">
+        Glow is AI—not a human or therapist, and not a substitute for professional or emergency care.
+      </p>
 
       <div className="glass rounded-3xl overflow-hidden w-full max-w-sm aspect-[3/4] relative mb-2">
         {mode === "avatar" && (

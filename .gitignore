@@ -14,7 +14,6 @@ node_modules/
 .tools/
 .env
 .env.*
-!.env.example
 
 # Test and coverage output
 coverage/

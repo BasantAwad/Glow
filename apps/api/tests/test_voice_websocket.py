@@ -37,12 +37,25 @@ AUDIO FIXTURE:
 
 import os
 import io
+import wave
 import pytest
 from fastapi.testclient import TestClient
 
 from glow_api.main import app
+from glow_api.routers.session_router import _pcm16_to_wav
 
 client = TestClient(app)
+
+
+def test_pcm16_stream_frames_are_wrapped_as_mono_wav():
+    pcm_frames = b"\x00\x00\x10\x00\xf0\xff\x00\x00"
+
+    wav_bytes = _pcm16_to_wav(pcm_frames, 16_000)
+    with wave.open(io.BytesIO(wav_bytes), "rb") as wav_file:
+        assert wav_file.getnchannels() == 1
+        assert wav_file.getsampwidth() == 2
+        assert wav_file.getframerate() == 16_000
+        assert wav_file.readframes(wav_file.getnframes()) == pcm_frames
 
 @pytest.mark.asyncio
 async def test_websocket_e2e_voice_flow():

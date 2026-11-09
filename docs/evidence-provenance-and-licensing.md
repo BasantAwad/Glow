@@ -5,6 +5,21 @@
 
 Glow strictly controls the information ingested into its Evidence Registry and RAG pipeline. We prioritize safety, legality, and clinical validity.
 
+## 0. Retrieval implementation and source intake status (2026-11-09)
+
+The session orchestrator now retrieves approved evidence from the existing `evidence_entries` database table using deterministic BM25-style lexical ranking. It filters by approval, complete provenance, locale, and jurisdiction; places bounded excerpts in an explicitly untrusted context block; and appends source links only after response safety validation. Retrieval runs locally and adds no embedding-service dependency. The existing embedding column is not used yet, and this is not semantic/vector search.
+
+The database remains **empty by default**. The curator-only `store_approved_evidence()` path rejects missing license/provenance or missing qualified-review approval. It is intentionally not exposed as a public API route. Do not mark the knowledge-base feature content-complete until a qualified reviewer approves actual content and rights are verified for the intended commercial use.
+
+### Candidate-source intake decisions
+
+- **NIMH:** Candidate source for English educational content. NIMH says most information is public domain unless otherwise indicated; review each page for third-party content, preserve attribution, and have a qualified clinician approve any excerpt before ingestion. Start with [NIMH Mental Health Information](https://www.nimh.nih.gov/health) and its [citation guidance](https://www.nimh.nih.gov/site-info/citing-nimh-publications-and-webpages).
+- **WHO:** Link-only pending written commercial permission or a content-specific license compatible with Glow. WHO's standard publication license is CC BY-NC-SA, and its policy says permission is required for commercial uses. See the [WHO copyright and licensing policy](https://www.who.int/about/policies/publishing/copyright).
+- **NHS:** Link-only pending content-specific reuse permission/license review; the public self-help pages are copyrighted. See [NHS self-help](https://www.nhs.uk/mental-health/self-help/).
+- **Centre for Clinical Interventions (CCI):** Link-only pending rights review/permission and qualified clinical review. CCI identifies its resources as Government of Western Australia copyright and says they are not a substitute for professional care. See [CCI self-help resources](https://www.cci.health.wa.gov.au/Resources/Looking-After-Yourself) and its [copyright/disclaimer](https://www.cci.health.wa.gov.au/Utilities/Copyright-and-Disclaimer).
+
+These source links may be shown as external reading links, but their text must not be scraped, copied into the registry, embedded, or served as Glow content until the indicated rights and review gates are met. Do not represent any source as clinically approved for Glow merely because the publisher is reputable.
+
 ## 1. Core Knowledge Resources for RAG
 The following are candidate sources, but exact licenses must be verified before copying, indexing, or serving their text commercially.
 

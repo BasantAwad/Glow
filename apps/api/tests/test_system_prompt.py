@@ -24,7 +24,8 @@ def test_prompt_is_non_empty():
 
 def test_prompt_male_variant():
     prompt = prompt_fn("en", therapist_gender="male")
-    assert "Dr. Alex" in prompt
+    assert "Alex" in prompt
+    assert "Dr. Alex" not in prompt
     assert "male" in prompt
     print(f"male prompt length: {len(prompt)} chars \u2713")
 

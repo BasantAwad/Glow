@@ -8,15 +8,14 @@ Architecture rules (CLAUDE.md §4, §8, ADR 0001):
  - No model provider SDK is imported in this module.
  - The model is called ONLY after the safety pre-generation check passes.
  - Model output MUST pass the post-generation check before being surfaced.
- - If no provider is configured, the gateway falls back to the local
-   conversational model, then to canned responses.
+ - If no provider is configured or a provider fails, the gateway fails clearly.
  - The gateway never stores raw session content — that is the responsibility
    of the session persistence layer, subject to consent.
  - The gateway must not claim to be human, to diagnose, or to prescribe.
 
 Provider selection is DEFERRED (ADR 0001).  Until approved:
  - ``ModelGateway.is_configured`` returns False for external providers.
- - Falls back to LocalModelGateway for offline functionality.
+ - No automatic local or canned response fallback is permitted.
 """
 
 from __future__ import annotations
@@ -24,10 +23,7 @@ from __future__ import annotations
 import abc
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import AsyncIterator
-
-from glow_api.local_gateway import LocalModelGateway
-
+from typing import Any, AsyncIterator
 
 class GenerationStopReason(StrEnum):
     """Why the model stopped generating."""
@@ -214,22 +210,17 @@ class OpenWeightsModelGateway(ModelGateway):
                 latency_ms=latency_ms,
                 token_count=token_count,
             )
-        except Exception as e:
-            # Fall back safely to LocalModelGateway so the user is never left without support
+        except Exception as exc:
             import logging
+
             logging.getLogger("glow_api.model_gateway").warning(
-                "Remote model provider call failed (%s); falling back to local context engine: %s",
-                url,
-                e,
+                "Configured model provider request failed (%s)", type(exc).__name__
             )
-            local_resp = await LocalModelGateway().generate(request)
-            return GenerationResponse(
-                text=local_resp.text,
-                stop_reason=local_resp.stop_reason,
-                model_id=f"{local_resp.model_id} (fallback)",
-                latency_ms=(time.perf_counter() - start_time) * 1000.0,
-                token_count=local_resp.token_count,
-            )
+            raise GlowError(
+                ErrorCode.PROVIDER_UNAVAILABLE,
+                "The configured model provider is unavailable. Please try again later.",
+                http_status=503,
+            ) from exc
 
     async def stream(self, request: GenerationRequest) -> AsyncIterator[str]:
         import httpx
@@ -289,17 +280,14 @@ class OpenWeightsModelGateway(ModelGateway):
 
 
 # Gateway factory — lazy, called at dependency-injection time (not at import time).
-# Never call this at module level; doing so crashes when settings fields are absent.
+# Never silently select a different model when the configured provider is absent.
 def get_model_gateway() -> ModelGateway:
-    """Return a configured ModelGateway, falling back to the local conversational
-    model when no external provider is configured or when the external provider
-    is unreachable at call time.
+    """Return the configured model gateway, or an explicit unconfigured sentinel.
 
-    Priority:
-    1. OpenWeightsModelGateway — if GLOW_LLM_API_BASE is set.
-    2. LocalModelGateway — local BlenderBot fallback, always available.
+    The local context engine remains available for direct, explicitly selected
+    use in development; it is never substituted for the configured model.
     """
     from glow_api.settings import settings
     if settings.llm_api_base:
         return OpenWeightsModelGateway()
-    return LocalModelGateway()
+    return UnconfiguredModelGateway()

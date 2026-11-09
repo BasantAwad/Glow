@@ -390,6 +390,10 @@ All variables use the `GLOW_` prefix. See `.env.example` for the complete list. 
 | `GLOW_LLM_API_BASE` | — | Phase 6A | OpenAI-compatible base URL for vLLM (e.g. `http://localhost:8000/v1`) |
 | `GLOW_LLM_API_KEY` | — | Phase 6A | API key for vLLM if auth is enabled |
 | `GLOW_LLM_MODEL_ID` | `Qwen/Qwen2.5-14B-Instruct` | Phase 6A | Exact model ID served by vLLM |
+| `GLOW_TAVUS_API_KEY` | — | Optional avatar session API | Server-side Tavus credential; never expose through `NEXT_PUBLIC_*` |
+| `GLOW_TAVUS_REPLICA_ID` | — | Optional avatar session API | Approved Tavus replica ID |
+| `GLOW_TAVUS_PERSONA_ID` | — | Optional avatar session API | Approved Tavus persona ID |
+| `NEXT_PUBLIC_TAVUS_DEPLOYMENT_ID` | configured deployment | Web avatar embed | Public Tavus deployment ID only; not a credential |
 | `GLOW_NVIDIA_API_KEY` | — | Phase 10 (A2F) | NVIDIA Cloud Functions API key for Audio2Face-3D |
 | `GLOW_HF_TOKEN` | — | Optional | Hugging Face token for model downloads |
 | `GLOW_STT_MODEL_ID` | `large-v3` | Phase 6B | Faster-Whisper model size override |

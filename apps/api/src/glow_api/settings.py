@@ -79,6 +79,13 @@ class Settings(BaseSettings):
     llm_max_tokens: int = 512
 
     # ---------------------------------------------------------------------------
+    # Tavus avatar conversation API (secret remains server-side)
+    # ---------------------------------------------------------------------------
+    tavus_api_key: str | None = None
+    tavus_replica_id: str | None = None
+    tavus_persona_id: str | None = None
+
+    # ---------------------------------------------------------------------------
     # STT Gateway (Phase 6B — Faster-Whisper)
     # ---------------------------------------------------------------------------
     stt_model_id: str | None = None

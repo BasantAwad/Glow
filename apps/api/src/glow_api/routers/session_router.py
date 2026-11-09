@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import json
 import logging
+import io
+import wave
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
@@ -46,6 +48,18 @@ from glow_api.user import UserAccount
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
+MAX_VOICE_BUFFER_BYTES = 48_000 * 2 * 120
+
+
+def _pcm16_to_wav(audio_bytes: bytes, sample_rate_hz: int) -> bytes:
+    """Wrap mono, signed 16-bit PCM bytes in an in-memory WAV container."""
+    wav_buffer = io.BytesIO()
+    with wave.open(wav_buffer, "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(sample_rate_hz)
+        wav_file.writeframes(audio_bytes)
+    return wav_buffer.getvalue()
 
 
 # ---------------------------------------------------------------------------
@@ -328,7 +342,7 @@ async def voice_stream(
     Providers:
       - STT: FasterWhisperSttGateway — requires ENABLE_LIVE_PROVIDER_TESTS=1 + model
       - TTS: KokoroTtsGateway — requires kokoro-onnx installed
-      - LLM: OpenWeightsModelGateway — requires GLOW_LLM_API_BASE
+    - LLM: configured model gateway — requires GLOW_LLM_API_BASE
 
     When any provider is not configured, that stage is skipped with a clear
     error message in the JSON stream.  The connection is NOT silently accepted
@@ -353,12 +367,21 @@ async def voice_stream(
 
     try:
         audio_buffer = bytearray()
+        sample_rate_hz = 16_000
 
         while True:
             message = await websocket.receive()
 
             if "bytes" in message:
-                audio_buffer.extend(message["bytes"])
+                frame = message["bytes"]
+                if len(audio_buffer) + len(frame) > MAX_VOICE_BUFFER_BYTES:
+                    audio_buffer.clear()
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": "Voice turn is too long. Please try a shorter turn.",
+                    })
+                    continue
+                audio_buffer.extend(frame)
                 # Acknowledge partial receipt (Whisper is block-based, not streaming)
                 await websocket.send_json({
                     "type": "stt_partial",
@@ -368,23 +391,34 @@ async def voice_stream(
 
             elif "text" in message:
                 data = json.loads(message["text"])
-                if data.get("type") == "flush":
+                if data.get("type") == "audio_config":
+                    candidate_rate = data.get("sample_rate_hz")
+                    if isinstance(candidate_rate, int) and 8_000 <= candidate_rate <= 48_000:
+                        sample_rate_hz = candidate_rate
+                elif data.get("type") == "flush":
                     if not audio_buffer:
                         continue
 
+                    # The browser streams mono signed-16-bit PCM frames as they
+                    # are captured. Keep legacy complete-WAV clients interoperable.
+                    audio_bytes = bytes(audio_buffer)
+                    if not audio_bytes.startswith(b"RIFF"):
+                        audio_bytes = _pcm16_to_wav(audio_bytes, sample_rate_hz)
+
                     req = TranscriptionRequest(
                         session_id=session_id,
-                        audio_chunk=bytes(audio_buffer),
+                        audio_chunk=audio_bytes,
                         is_final=True,
                     )
                     audio_buffer.clear()
 
                     try:
                         stt_resp = await stt.transcribe(req)
-                    except Exception as e:
+                    except Exception as exc:
+                        logger.warning("voice_stream: STT failed (%s)", type(exc).__name__)
                         await websocket.send_json({
                             "type": "error",
-                            "message": f"STT failed: {e}"
+                            "message": "Speech recognition is temporarily unavailable. Please try again.",
                         })
                         continue
 
@@ -415,14 +449,17 @@ async def voice_stream(
                             except ProviderNotConfiguredError as e:
                                 await websocket.send_json({
                                     "type": "error",
-                                    "message": f"LLM is not configured: {e.detail}",
+                                    "message": "The conversation model is not configured. Please try again later.",
                                 })
+                                await websocket.send_json({"type": "turn_complete", "audio_available": False})
                                 continue
-                            except Exception as e:
+                            except Exception as exc:
+                                logger.warning("voice_stream: LLM failed (%s)", type(exc).__name__)
                                 await websocket.send_json({
                                     "type": "error",
-                                    "message": f"LLM Server error: {e}",
+                                    "message": "The conversation service is temporarily unavailable. Please try again.",
                                 })
+                                await websocket.send_json({"type": "turn_complete", "audio_available": False})
                                 continue
 
                             await websocket.send_json({
@@ -440,16 +477,21 @@ async def voice_stream(
                                 try:
                                     tts_resp = await tts.synthesize(tts_req)
                                     await websocket.send_bytes(tts_resp.audio_chunk)
-                                except ProviderNotConfiguredError as e:
+                                except ProviderNotConfiguredError:
                                     await websocket.send_json({
                                         "type": "error",
-                                        "message": f"tts_not_configured: {e}",
+                                        "message": "Voice playback is unavailable; the response is shown as text.",
                                     })
-                                except Exception as e:
+                                except Exception as exc:
+                                    logger.warning("voice_stream: TTS failed (%s)", type(exc).__name__)
                                     await websocket.send_json({
                                         "type": "error",
-                                        "message": f"TTS failed: {e}",
+                                        "message": "Voice playback failed; the response is shown as text.",
                                     })
+                            await websocket.send_json({
+                                "type": "turn_complete",
+                                "audio_available": tts.is_configured,
+                            })
                     else:
                         await websocket.send_json({
                             "type": "stt_error",

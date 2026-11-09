@@ -1,9 +1,17 @@
 import pytest
-from glow_api.model_gateway import OpenWeightsModelGateway, GenerationRequest, LocalModelGateway
+from glow_api.errors import ErrorCode, GlowError, ProviderNotConfiguredError
+from glow_api.local_gateway import LocalModelGateway
+from glow_api.model_gateway import (
+    GenerationRequest,
+    OpenWeightsModelGateway,
+    UnconfiguredModelGateway,
+    get_model_gateway,
+)
+from glow_api.settings import settings
 
 @pytest.mark.asyncio
 async def test_local_model_gateway_direct():
-    """Verify the offline local context engine fallback responds appropriately."""
+    """Verify the local context engine only works when explicitly selected."""
     gateway = LocalModelGateway()
     assert gateway.is_configured is True
 
@@ -23,8 +31,8 @@ async def test_local_model_gateway_direct():
     assert resp.token_count > 0
 
 @pytest.mark.asyncio
-async def test_open_weights_gateway_fallback_on_unreachable():
-    """Verify that OpenWeightsModelGateway automatically falls back to LocalModelGateway without failing."""
+async def test_open_weights_gateway_does_not_fallback_on_unreachable():
+    """A configured provider outage is surfaced instead of switching models."""
     gateway = OpenWeightsModelGateway()
     # Point to an unreachable mock endpoint to test fallback
     gateway.api_base = "http://127.0.0.1:59999/unreachable"
@@ -40,9 +48,34 @@ async def test_open_weights_gateway_fallback_on_unreachable():
         timeout_sec=0.5
     )
 
-    resp = await gateway.generate(req)
-    assert resp.text
-    assert "fallback" in resp.model_id or len(resp.text) > 5
+    with pytest.raises(GlowError) as exc_info:
+        await gateway.generate(req)
+
+    assert exc_info.value.code == ErrorCode.PROVIDER_UNAVAILABLE
+    assert "fallback" not in str(exc_info.value).lower()
+
+
+def test_model_gateway_factory_does_not_select_local_model_automatically(monkeypatch):
+    monkeypatch.setattr(settings, "llm_api_base", None)
+
+    assert isinstance(get_model_gateway(), UnconfiguredModelGateway)
+
+
+@pytest.mark.asyncio
+async def test_unconfigured_model_gateway_fails_clearly(monkeypatch):
+    monkeypatch.setattr(settings, "llm_api_base", None)
+    gateway = get_model_gateway()
+    request = GenerationRequest(
+        session_id="test_unconfigured",
+        user_id="test_user",
+        system_prompt="You are Glow.",
+        conversation_history=(),
+        user_message="Hello.",
+        locale="en",
+    )
+
+    with pytest.raises(ProviderNotConfiguredError):
+        await gateway.generate(request)
 
 @pytest.mark.asyncio
 async def test_open_weights_gateway_generate_contract():

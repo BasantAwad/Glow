@@ -335,18 +335,25 @@ TTS: Kokoro (local, Apache 2.0) — code complete, not yet live-tested. STT: Fas
 - **Security, privacy, clinical-safety, and compliance impact:** Enforced the strict no-mock policy by completely blocking the live voice testing pathway until a verified human audio fixture is available.
 - **Exact next steps:** Fix existing repository failures and ensure production paths fail clearly if auth/DB/LLM are unconfigured (Step 2). Then proceed to PostgreSQL Alembic migrations (Step 4).
 
- # #   2 0 2 6 - 0 8 - 2 5      A g e n t   ( A n t i g r a v i t y / C l a u d e   S o n n e t   4 . 6   T h i n k i n g )      C o n f i g u r a t i o n   A u d i t   &   E n f o r c e m e n t 
- 
- -   * * O v e r a l l   o b j e c t i v e : * *   B u i l d   G l o w ,   p r i o r i t i z i n g   s t r i c t   p r i v a c y ,   l o c a l   e x e c u t i o n ,   a n d   r e a l   p r o v i d e r   i n t e g r a t i o n . 
- -   * * C u r r e n t   p h a s e / t a s k : * *   C o n f i g u r a t i o n   A u d i t   a n d   S t r i c t   T e s t i n g   E n f o r c e m e n t 
- -   * * C o m p l e t e d   w o r k : * * 
-     -   A u d i t e d   l o c a l   e n v i r o n m e n t   f o r   e x p o s e d   s e c r e t s ;   v e r i f i e d   n o n e   e x p o s e d   a n d   . e n v   c o r r e c t l y   g i t i g n o r e d . 
-     -   E n f o r c e d   G L O W _   p r e f i x   f o r   a l l   e n v i r o n m e n t   v a r i a b l e s   ( e . g . ,   G L O W _ S T T _ M O D E L _ I D ,   G L O W _ T T S _ V O I C E _ I D ,   G L O W _ N V I D I A _ A P I _ K E Y ) . 
-     -   U p d a t e d   . e n v . e x a m p l e ,   s e t t i n g s . p y ,   C L A U D E . m d ,   a n d   r e a l - m o d e l - c o n f i g u r a t i o n . m d   t o   u s e   e x a c t   s t a t u s e s   ( m i s s i n g ,   u n r e a c h a b l e ,   b l o c k e d ,   p r e s e n t _ n o n _ p l a c e h o l d e r ) . 
-     -   V e r i f i e d   v L L M   i s   u n r e a c h a b l e   l o c a l l y   a n d   d o c u m e n t e d   s t a t u s   a s   b l o c k e d / u n r e a c h a b l e . 
-     -   M o d i f i e d   l i v e - p r o v i d e r   t e s t s   t o   f a i l   e x p l i c i t l y   r a t h e r   t h a n   s k i p   s i l e n t l y   w h e n   E N A B L E _ L I V E _ P R O V I D E R _ T E S T S = 1   b u t   p r o v i d e r s   a r e   u n c o n f i g u r e d . 
- -   * * C o m m a n d s / r e s u l t s : * *   g i t   d i f f   c h e c k s   c o n f i r m e d   n o   s e c r e t s   e x p o s e d .   P y t e s t   r u n   c o n f i r m e d   d e t e r m i n i s t i c   t e s t s   p a s s ,   w h i l e   l i v e   t e s t s   f a i l   e x p l i c i t l y   d u e   t o   m i s s i n g   c o n f i g u r a t i o n s . 
- -   * * E x a c t   n e x t   s t e p s : * *   P r e s e n t   f i n d i n g s   t o   t h e   u s e r   a n d   a w a i t   i n s t r u c t i o n   b e f o r e   a t t e m p t i n g   A v a t a r ,   P o s t g r e s ,   o r   A u t h   c h a n g e s . 
- 
- 
- 
+## 2026-08-25   Agent (Antigravity/Claude Sonnet 4.6 Thinking)   Configuration Audit & Enforcement
+
+- **Overall objective:** Build Glow, prioritizing strict privacy, local execution, and real provider integration.
+- **Current phase/task:** Configuration Audit and Strict Testing Enforcement
+- **Completed work:**
+  - Audited local environment for exposed secrets; verified none exposed and .env correctly gitignored.
+  - Enforced GLOW_ prefix for all environment variables (e.g., GLOW_STT_MODEL_ID, GLOW_TTS_VOICE_ID, GLOW_NVIDIA_API_KEY).
+  - Updated .env.example, settings.py, CLAUDE.md, and real-model-configuration.md to use exact statuses (missing, unreachable, blocked, present_non_placeholder).
+  - Verified vLLM is unreachable locally and documented status as blocked/unreachable.
+  - Modified live-provider tests to fail explicitly rather than skip silently when ENABLE_LIVE_PROVIDER_TESTS=1 but providers are unconfigured.
+- **Commands/results:** git diff checks confirmed no secrets exposed. Pytest run confirmed deterministic tests pass, while live tests fail explicitly due to missing configurations.
+- **Exact next steps:** Present findings to the user and await instruction before attempting Avatar, Postgres, or Auth changes.
+
+## 2026-11-09 — Evidence retrieval/RAG wiring and provider review
+
+- **Objective:** Connect approved mental-health evidence to safe conversation generation without rebuilding the existing backend or sending real session data to an unreviewed free-tier model.
+- **Completed:** Added SQLite/PostgreSQL-compatible BM25-style lexical retrieval over approved `evidence_entries`, curator-only persistence validation, locale/jurisdiction and provenance filtering, bounded untrusted-source prompt context, and validated citation footers after post-generation safety checks. The orchestrator now instructs the model not to assert evidence-based claims or invent sources when retrieval is empty or unavailable. No new dependency or migration was added.
+- **Source/license review:** Documented candidate source rights: NIMH page-specific public-domain checks; WHO content is link-only absent commercial permission; NHS and CCI are link-only pending reuse review. The evidence table remains empty; no source text was copied or auto-ingested. Qualified clinical review remains required before population.
+- **Model decision:** The local Qwen choice remains unchanged but cannot run on this workstation's Quadro P1000. Google's current Gemini API terms say not to send sensitive/confidential/personal information to unpaid services and disclaim reliance for mental-health advice. Free Gemini is therefore not enabled for real Glow user messages. A paid cloud provider still requires legal/privacy and regional review. The gateway continues to fail without fallback.
+- **Tests:** Focused RAG/orchestrator/crisis/no-fallback tests: 17 passed, 2 live tests skipped. Test fixtures use inert token text only; no real user content or model provider was used.
+- **Remaining blockers:** The approved corpus is empty, retrieval is lexical rather than semantic/vector, provider legal review is pending, and the local model endpoint is unavailable.
+- **Next steps:** Curate and clear source rights, obtain qualified review, ingest through the trusted curator path, evaluate groundedness, and select a privacy-reviewed inference service or suitable local host. Do not claim production-ready knowledge coverage until these gates pass.

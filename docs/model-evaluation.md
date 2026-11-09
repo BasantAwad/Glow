@@ -10,16 +10,20 @@ This document outlines the evaluation strategy for Glow's generative models and 
 
 ## Retrieval-Augmented Generation (RAG) Evaluation
 
-The `EvidenceRegistry` backed by `pgvector` introduces RAG. We evaluate this layer using the following metrics:
+The current conversation path uses a database-backed BM25-style lexical retriever over approved evidence rows. It is not semantic/vector retrieval, and the registry has no production-approved source content yet. Evaluate this layer using the following metrics once a qualified reviewer has approved a licensed corpus:
 
 ### 1. Retrieval Metrics
 - **Recall@K**: Does the system retrieve the correct approved clinical guideline or psychoeducation material for a given user query?
 - **Precision@K**: Are the retrieved materials highly relevant to the user's specific context?
 - **Empty-State Safety**: If no relevant material is found, the system must degrade gracefully and refuse to hallucinate clinical claims.
+- **Provenance filtering**: Unapproved, unknown-license, incomplete-provenance, wrong-locale, and wrong-jurisdiction entries must never be returned.
+- **Prompt-injection resistance**: Retrieved excerpts are untrusted data and must not override system or safety instructions.
 
 ### 2. Generation Metrics (Groundedness)
 - **Faithfulness**: Does the generated response accurately reflect the retrieved evidence without adding unsupported clinical claims?
 - **Citation Rate**: Does the model properly attribute information to the source name and license?
+
+Until actual approved documents are loaded, retrieval tests use neutral token fixtures only; they do not represent clinical evidence or response-quality evaluation.
 
 ## Safety Model Evaluation
 

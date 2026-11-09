@@ -3,6 +3,14 @@
 **Date:** 2026-08-25
 **Status:** Approved for Phase 6 Implementation
 
+## Current Deployment Constraint (2026-11-09)
+
+The approved model remains self-hosted Qwen behind the OpenAI-compatible gateway, but this developer workstation's NVIDIA Quadro P1000 (4 GB VRAM) cannot run the planned vLLM/CUDA setup. The endpoint must remain unconfigured/unavailable rather than silently selecting a different model.
+
+The suggested Gemini API **free tier is not approved for Glow user conversations**. Google's current Gemini API Additional Terms state that unpaid-service inputs and outputs may be used to improve/develop products, may be reviewed by humans, and that sensitive, confidential, or personal information must not be submitted. The same terms disclaim reliance on Gemini for mental-health advice. Glow user messages are sensitive by nature, so do not point production/dev sessions containing real user data at that free tier. See [Gemini API Additional Terms](https://aistudio.google.com/docs/terms) and [Gemini API pricing/data-use summary](https://aistudio.google.com/docs/pricing).
+
+Gemini's paid tier states that prompts/outputs are not used to improve products and are processed under its Data Processing Addendum, but any paid cloud integration still requires privacy/legal/vendor review, accurate user disclosure/consent, and regional review before real user data is sent. No Gemini key or cloud model is configured by this record. Until that review or suitable infrastructure exists, Glow must fail clearly; it must not fall back silently.
+
 ## 1. Primary Text LLM Strategy
 ## 1. LLM Strategy
 - **Provider:** `vLLM` (Local/Self-hosted)

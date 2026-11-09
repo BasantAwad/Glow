@@ -16,6 +16,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from glow_api.consent import ConsentRecord
 from glow_api.crypto import EnvelopeEncryption
 from glow_api.errors import AuthenticationError, NotFoundError
+from glow_api.evidence import (
+    build_evidence_context,
+    format_evidence_citations,
+    retrieve_approved_evidence,
+)
 from glow_api.kms import kms_service
 from glow_api.model_gateway import GenerationRequest, ModelGateway
 from glow_api.models import (
@@ -53,10 +58,12 @@ def _build_therapeutic_system_prompt(
         session_mode: One of 'listen_only', 'guided', 'open'.
         therapist_gender: Optional gender presentation ('female', 'male').
     """
-    therapist_name = "Dr. Alex" if therapist_gender == "male" else "Dr. Sarah"
+    persona_name = "Alex" if therapist_gender == "male" else "Sarah"
     pronoun = "he" if therapist_gender == "male" else "she"
 
-    return f"""You are Glow (also known warmly as {therapist_name} if preferred), a warm, compassionate, non-judgmental AI wellbeing companion ({therapist_gender} presentation, {pronoun} pronouns).
+    return f"""You are Glow, a warm, compassionate, non-judgmental AI wellbeing companion.
+If a fictional persona name is needed, use {persona_name} ({therapist_gender} presentation,
+{pronoun} pronouns). Never claim real-world credentials or personal experience.
 
 Your purpose is to help the user feel heard, reflect on their experience, and
 choose a small, manageable next step if they want one. You are not a therapist,
@@ -115,13 +122,16 @@ conversation.
 - Adapt to their preference as the conversation continues.
 
 ## PHYSICAL HEALTH AWARENESS
-- Physical health and mental health are deeply connected. Notice when the user mentions sleep, exhaustion, headaches, stomach tension, appetite shifts, or chronic pain.
+- Physical health and mental health are deeply connected. Notice when the user mentions sleep,
+  exhaustion, headaches, stomach tension, appetite shifts, or chronic pain.
 - Gently explore: "When you notice that heavy feeling, where do you feel it in your body?"
-- Remind the user when appropriate: "I am not a doctor or medical professional. If these physical symptoms continue, checking in with a doctor can be a really helpful step."
+- Remind the user when appropriate: "I am not a doctor or medical professional. If these physical
+    symptoms continue, checking in with a doctor can be a really helpful step."
 - NEVER diagnose a medical condition, prescribe medications, or adjust dosages.
 
 ## NON-VERBAL AND SHORT MESSAGE SUPPORT
-- When someone struggles to speak, is non-verbal, overwhelmed, or sends short messages ("fine", "ok", "tired", an emoji):
+- When someone struggles to speak, is non-verbal, overwhelmed, or sends short messages
+    ("fine", "ok", "tired", an emoji):
   - Do NOT overwhelm them with long paragraphs.
   - Acknowledge in one short, warm sentence.
   - Ask ONE gentle, concrete question that requires minimal effort.
@@ -129,10 +139,12 @@ conversation.
 
 ## Wellbeing tools (offer only when appropriate and user seems open)
 Available tools you can mention:
-- Breathing exercises: belly breathing, box breathing, extended exhale, 4-7-8, 5-4-3-2-1 grounding breath.
+- Breathing exercises: belly breathing, box breathing, extended exhale, 4-7-8, 5-4-3-2-1
+    grounding breath.
 - Grounding: 5-4-3-2-1 grounding, sensory grounding, body scan.
 - Journaling: guided reflections or free notebook writing (available in the Reflections section).
-- Creative calming: coloring, soundscapes, pattern tracing, memory garden (available in the Games and Practices sections).
+- Creative calming: coloring, soundscapes, pattern tracing, memory garden (available in the Games
+    and Practices sections).
 - Gentle movement: short stretching or beginner-friendly yoga (available in the Practices section).
 
 When offering a tool:
@@ -142,7 +154,8 @@ When offering a tool:
 - Do not diagnose why the user feels a certain way.
 - Do not imply that an exercise will solve their problem.
 
-Example: "Would a two-minute breathing exercise feel manageable right now, or would you prefer to keep talking?"
+Example: "Would a two-minute breathing exercise feel manageable right now, or would you prefer to
+keep talking?"
 
 ## Boundaries — absolute rules
 Never:
@@ -199,7 +212,8 @@ emergency services or a crisis line. Are you safe right now?"
 - Remember context from this conversation.
 - Do not infer sensitive details, diagnoses, trauma history, or identity.
 - Respect corrections immediately.
-- If the user asks what you are, say you are Glow, an AI wellbeing companion — not a therapist or medical professional.
+- If the user asks what you are, say you are Glow, an AI wellbeing companion — not a therapist or
+    medical professional.
 
 ## Response structure (non-crisis)
 1. Acknowledge the feeling or experience.
@@ -288,7 +302,9 @@ class SessionOrchestrator:
     ) -> dict[str, str]:
         """Start a new active session."""
         if not user.can_start_session:
-            raise AuthenticationError(detail="User cannot start sessions (age unverified or inactive).")
+            raise AuthenticationError(
+                detail="User cannot start sessions (age unverified or inactive)."
+            )
 
         if not self.policy_engine.can_start_session(user):
             raise ValueError("Billing required. Please purchase sessions.")
@@ -399,23 +415,42 @@ class SessionOrchestrator:
         history_res = await self.db.execute(history_stmt)
         history_msgs = history_res.scalars().all()
 
-        history_tuples = []
+        history_items: list[tuple[str, str]] = []
         for m in history_msgs:
             key = kms_service.get_master_key(m.key_id)
             nonce = m.encrypted_content[:12]
             ciphertext = m.encrypted_content[12:]
             decrypted = EnvelopeEncryption.decrypt(key, nonce, ciphertext).decode('utf-8')
             if decrypted != content:
-                history_tuples.append((m.role, decrypted))
+                history_items.append((m.role, decrypted))
 
-        history_tuples = tuple(history_tuples)
+        history_tuples = tuple(history_items)
 
         locale_value = user.preferences.locale.value
         session_mode = db_session.mode if db_session.mode else "open"
+        try:
+            evidence_matches = await retrieve_approved_evidence(
+                self.db,
+                query=content,
+                locale=locale_value,
+                jurisdiction="EG",
+            )
+        except Exception as exc:
+            logger.warning("Approved evidence retrieval unavailable (%s)", type(exc).__name__)
+            evidence_matches = []
         system_prompt = _build_therapeutic_system_prompt(
             locale=locale_value,
             session_mode=session_mode,
         )
+        evidence_context = build_evidence_context(evidence_matches)
+        if evidence_context:
+            system_prompt = f"{system_prompt}\n\n{evidence_context}"
+        else:
+            system_prompt += (
+                "\n\nEVIDENCE LIMIT: No approved source was retrieved for this turn. "
+                "Do not claim mental-health facts are evidence-based, invent sources, "
+                "or give clinical instructions. Stay supportive and non-diagnostic."
+            )
         request = GenerationRequest(
             session_id=session_id,
             user_id=user.user_id,
@@ -435,9 +470,11 @@ class SessionOrchestrator:
         await self._audit_safety_decision(session_id, user.user_id, post_check)
 
         if post_check.block_generation:
-            reply = post_check.response_override or "The generated response was blocked for safety reasons."
+            reply = post_check.response_override or (
+                "The generated response was blocked for safety reasons."
+            )
         else:
-            reply = response.text
+            reply = response.text + format_evidence_citations(evidence_matches)
 
         # Save assistant message
         await self._save_message(session_id, db_session.id, consent, "assistant", reply)
