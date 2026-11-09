@@ -53,4 +53,5 @@ files = ["src", "tests"]
 
 [tool.vercel]
 entrypoint = "src.glow_api.main:app"
+entrypoint = "src.glow_api.main:app"
 
