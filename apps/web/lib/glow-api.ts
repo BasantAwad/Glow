@@ -12,7 +12,7 @@
  * human-readable message rather than a raw "Failed to fetch" TypeError.
  */
 
-export const API_BASE = process.env.API_URL ?? process.env.NEXT_PUBLIC_GLOW_API_URL ?? "http://127.0.0.1:8000";
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? process.env.API_URL ?? process.env.NEXT_PUBLIC_GLOW_API_URL ?? "http://127.0.0.1:8000";
 
 /** Thrown when the Glow API server cannot be reached at all. */
 export class GlowApiOfflineError extends Error {

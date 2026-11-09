@@ -13,7 +13,7 @@
           "type": "service",
           "service": "api",
           "format": "url",
-          "env": "API_URL"
+          "env": "NEXT_PUBLIC_API_URL"
         }
       ]
     }
