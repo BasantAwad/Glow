@@ -51,3 +51,6 @@ python_version = "3.13"
 strict = true
 files = ["src", "tests"]
 
+[tool.vercel]
+entrypoint = "src.glow_api.main:app"
+
