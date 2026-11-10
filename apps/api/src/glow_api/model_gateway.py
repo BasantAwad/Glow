@@ -635,6 +635,29 @@ def get_model_gateway() -> ModelGateway:
     if local_enabled:
         from glow_api.local_gateway import LocalModelGateway
 
+        # Built-in keyless fallback (Pollinations) before the local engine, so chat
+        # can still use a real model even when the configured provider is down and
+        # no second provider key is available. Added after the configured fallback
+        # so it never overrides the user's chosen providers.
+        if not any(
+            isinstance(g, OpenWeightsModelGateway)
+            and getattr(g, "api_base", None) == "https://text.pollinations.ai/openai"
+            for g in chain
+        ):
+            pollinations = OpenWeightsModelGateway(
+                api_base="https://text.pollinations.ai/openai",
+                api_key=None,
+                model_id="openai",
+            )
+            # Insert before any local engine already in the chain.
+            insert_at = len(chain)
+            for i, g in enumerate(chain):
+                if isinstance(g, LocalModelGateway):
+                    insert_at = i
+                    break
+            chain.insert(insert_at, pollinations)
+            log.info("Built-in fallback LLM: Pollinations (keyless)")
+
         if not any(isinstance(g, LocalModelGateway) for g in chain):
             log.info("Final fallback LLM: local context engine")
             chain.append(LocalModelGateway())
