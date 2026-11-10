@@ -19,43 +19,41 @@ function TavusPresenter() {
   const [embedStatus, setEmbedStatus] = useState<"loading" | "ready" | "error">("loading");
 
   useEffect(() => {
-    let disposed = false;
-    let timeoutId: number | undefined;
+    let cancelled = false;
     const scriptUrl = "https://unpkg.com/@tavus/embed@latest";
-    const script = document.querySelector<HTMLScriptElement>(`script[src="${scriptUrl}"]`);
+    const startedAt = Date.now();
 
-    const markReady = () => {
-      void customElements.whenDefined("tavus-embed").then(() => {
-        if (!disposed) setEmbedStatus("ready");
-      });
-    };
-    const markError = () => {
-      if (!disposed) setEmbedStatus("error");
-    };
-
+    // Deterministic check: the embed is usable once the custom element is
+    // registered. Polling avoids races between the script load event, the
+    // 20s timeout, and React's effect lifecycle.
     if (customElements.get("tavus-embed")) {
-      void Promise.resolve().then(() => {
-        if (!disposed) setEmbedStatus("ready");
-      });
+      setEmbedStatus("ready");
       return;
     }
 
-    const embedScript = script ?? document.createElement("script");
-    embedScript.addEventListener("load", markReady, { once: true });
-    embedScript.addEventListener("error", markError, { once: true });
-    timeoutId = window.setTimeout(markError, 15_000);
-
-    if (!script) {
+    if (!document.querySelector(`script[src="${scriptUrl}"]`)) {
+      const embedScript = document.createElement("script");
       embedScript.src = scriptUrl;
       embedScript.async = true;
       document.body.appendChild(embedScript);
     }
 
+    const intervalId = window.setInterval(() => {
+      if (cancelled) return;
+      if (customElements.get("tavus-embed")) {
+        window.clearInterval(intervalId);
+        setEmbedStatus("ready");
+        return;
+      }
+      if (Date.now() - startedAt > 25_000) {
+        window.clearInterval(intervalId);
+        setEmbedStatus("error");
+      }
+    }, 250);
+
     return () => {
-      disposed = true;
-      embedScript.removeEventListener("load", markReady);
-      embedScript.removeEventListener("error", markError);
-      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+      cancelled = true;
+      window.clearInterval(intervalId);
     };
   }, []);
 

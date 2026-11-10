@@ -88,6 +88,11 @@ class Settings(BaseSettings):
     # Exact model ID served by vLLM.
     llm_model_id: str = "Qwen/Qwen2.5-14B-Instruct"
 
+    # Optional comma-separated extra model IDs to try on the same provider when
+    # the primary model is unavailable (e.g. a free model whose upstream pool is
+    # rate-limited). Tried in order before the configured fallback provider.
+    llm_model_fallback_ids: str | None = None
+
     # Maximum tokens to generate per response.
     llm_max_tokens: int = 512
 

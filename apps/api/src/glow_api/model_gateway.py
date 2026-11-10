@@ -297,7 +297,13 @@ class OpenWeightsModelGateway(ModelGateway):
                 if resp.status_code == 400 and tools:
                     # Provider rejected function calling — answer without tools.
                     return await self._complete_once(request, messages, None)
-                resp.raise_for_status()
+                if resp.status_code >= 400:
+                    # Surface the provider's own error text in logs; it usually
+                    # explains 429s (daily/minute limits, no provider, etc.).
+                    last_exc = RuntimeError(
+                        f"HTTP {resp.status_code}: {resp.text[:600]}"
+                    )
+                    break
                 return resp.json()
             except GlowError:
                 raise
@@ -308,8 +314,9 @@ class OpenWeightsModelGateway(ModelGateway):
         import logging
 
         logging.getLogger("glow_api.model_gateway").warning(
-            "Configured model provider request failed (%s)",
+            "Configured model provider request failed (%s): %s",
             type(last_exc).__name__ if last_exc else "unknown",
+            str(last_exc)[:600] if last_exc else "",
         )
         raise GlowError(
             ErrorCode.PROVIDER_UNAVAILABLE,
@@ -491,6 +498,30 @@ def _search_gateway():
     return get_web_search_gateway()
 
 
+def _build_openai_compatible_chain(settings, web_search=None) -> ModelGateway:
+    """Primary model plus any configured same-provider model fallbacks.
+
+    Free model tiers are frequently rate-limited by their upstream provider.
+    Trying a couple of alternate model IDs on the same endpoint keeps chat on a
+    real model instead of dropping straight to the local rule-based engine.
+    """
+    models = [settings.llm_model_id]
+    extra = getattr(settings, "llm_model_fallback_ids", None) or ""
+    models.extend(m.strip() for m in extra.split(",") if m.strip())
+
+    gateways: list[ModelGateway] = []
+    for index, model_id in enumerate(models):
+        gateways.append(
+            OpenWeightsModelGateway(
+                model_id=model_id,
+                web_search=web_search if index == 0 else None,
+            )
+        )
+    if len(gateways) == 1:
+        return gateways[0]
+    return FallbackModelGateway(gateways)
+
+
 def _build_primary_gateway(settings, log) -> ModelGateway | None:
     provider = getattr(settings, "llm_provider", "auto")
 
@@ -504,7 +535,7 @@ def _build_primary_gateway(settings, log) -> ModelGateway | None:
     if provider == "openai_compatible":
         if settings.llm_api_base:
             log.info("Primary LLM: OpenAI-compatible (%s)", settings.llm_api_base)
-            return OpenWeightsModelGateway(web_search=_search_gateway())
+            return _build_openai_compatible_chain(settings, web_search=_search_gateway())
         log.warning("GLOW_LLM_PROVIDER=openai_compatible but GLOW_LLM_API_BASE is missing")
         return None
     if provider == "huggingface":
@@ -523,7 +554,7 @@ def _build_primary_gateway(settings, log) -> ModelGateway | None:
     # auto: external only when a base URL is configured.
     if settings.llm_api_base:
         log.info("Primary LLM: OpenAI-compatible (auto, %s)", settings.llm_api_base)
-        return OpenWeightsModelGateway(web_search=_search_gateway())
+        return _build_openai_compatible_chain(settings, web_search=_search_gateway())
     return None
 
 
