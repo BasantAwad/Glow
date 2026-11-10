@@ -14,7 +14,7 @@
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? process.env.API_URL ?? process.env.NEXT_PUBLIC_GLOW_API_URL ?? "http://127.0.0.1:8000";
 
-/** Thrown when the Glow API server cannot be reached at all. */
+/** Thrown when the API server cannot be reached at all. */
 export class GlowApiOfflineError extends Error {
   constructor() {
     super(
@@ -24,6 +24,18 @@ export class GlowApiOfflineError extends Error {
         `Expected at: ${API_BASE}`,
     );
     this.name = "GlowApiOfflineError";
+  }
+}
+
+/**
+ * Thrown when no signed-in session exists and the dev bootstrap endpoint is
+ * unavailable (it is disabled in production). Callers should send the user to
+ * the login page.
+ */
+export class GlowAuthRequiredError extends Error {
+  constructor() {
+    super("Please sign in to continue.");
+    this.name = "GlowAuthRequiredError";
   }
 }
 
@@ -130,6 +142,12 @@ export async function ensureSession(): Promise<{ token: string; userId: string }
   }
 
   // Ask the backend dev-bootstrap endpoint for a fresh identity+token.
+  // That endpoint is development-only, so in production require a real login
+  // instead of surfacing a confusing 404 ("Not found") to the user.
+  if (process.env.NODE_ENV === "production") {
+    throw new GlowAuthRequiredError();
+  }
+
   const res = await apiFetch(`${API_BASE}/auth/dev-bootstrap`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

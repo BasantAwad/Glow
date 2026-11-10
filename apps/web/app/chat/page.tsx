@@ -11,6 +11,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Send, Sparkles, Loader2, AlertTriangle, Mic, MicOff, MessageSquare } from "lucide-react";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { SafetyNote } from "../../components/SafetyNote";
@@ -19,6 +20,8 @@ import {
   startGlowSession,
   sendMessage,
   getApiErrorMessage,
+  GlowAuthRequiredError,
+  GlowApiError,
 } from "../../lib/glow-api";
 
 type Message = {
@@ -90,6 +93,7 @@ function ModeSelection({ onSelect }: { onSelect: (mode: SessionMode) => void }) 
 
 export default function ChatPage() {
   const { t } = useLanguage();
+  const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -182,6 +186,10 @@ export default function ChatPage() {
 
       setMessages([{ id: "welcome", role: "assistant", content: greeting }]);
     } catch (err) {
+      if (err instanceof GlowAuthRequiredError || (err instanceof GlowApiError && err.status === 401)) {
+        router.push("/login");
+        return;
+      }
       setError(getApiErrorMessage(err, "Couldn't start the session. Please try again."));
       setSessionMode(null); // Go back to mode selection
     } finally {
