@@ -17,6 +17,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from sqlalchemy import MetaData
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -26,6 +27,43 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import DeclarativeBase
 
 from glow_api.settings import settings
+
+
+def prepare_asyncpg_url(raw_url: str) -> tuple[str, dict[str, Any]]:
+    """Return an asyncpg-compatible URL plus matching connect args.
+
+    Neon (and most managed Postgres providers) hand out libpq-style query
+    params such as ``sslmode`` and ``channel_binding``. asyncpg's ``connect()``
+    rejects those as unexpected keyword arguments, which crashes the app on
+    startup. We strip them here and translate SSL into the ``ssl`` connect arg
+    instead.
+
+    Neon's ``-pooler`` endpoint is PgBouncer in transaction mode, which does not
+    support server-side prepared statements. Disable the asyncpg statement cache
+    for pooler hosts so queries don't fail intermittently.
+    """
+    url = raw_url
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+    elif url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+    if not url.startswith("postgresql+asyncpg://"):
+        return url, {}
+
+    parsed = make_url(url)
+    query = dict(parsed.query)
+    sslmode = query.pop("sslmode", None)
+    query.pop("channel_binding", None)
+    parsed = parsed.set(query=query)
+
+    connect_args: dict[str, Any] = {}
+    if sslmode and sslmode not in ("disable", "allow"):
+        connect_args["ssl"] = True
+    if "pooler" in (parsed.host or ""):
+        connect_args["statement_cache_size"] = 0
+
+    return parsed.render_as_string(hide_password=False), connect_args
 
 
 # ---------------------------------------------------------------------------
@@ -84,14 +122,9 @@ class DatabaseManager:
         if not settings.database_url:
             return
 
-        db_url = settings.database_url
-        if db_url.startswith("postgres://"):
-            db_url = db_url.replace("postgres://", "postgresql+asyncpg://", 1)
-        elif db_url.startswith("postgresql://"):
-            db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        db_url, connect_args = prepare_asyncpg_url(settings.database_url)
 
         # SQLite-specific tuning
-        connect_args: dict[str, Any] = {}
         engine_kwargs: dict[str, Any] = {
             "echo": settings.environment == "development",
             "future": True,
@@ -107,6 +140,8 @@ class DatabaseManager:
             # SQLite serializes writers; a tiny pool avoids needless churn.
             engine_kwargs["pool_size"] = 2
             engine_kwargs["max_overflow"] = 3
+        elif connect_args:
+            engine_kwargs["connect_args"] = connect_args
 
         self._engine = create_async_engine(db_url, **engine_kwargs)
         self._session_factory = async_sessionmaker(

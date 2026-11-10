@@ -22,18 +22,16 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from glow_api.database import Base
+from glow_api.database import Base, prepare_asyncpg_url
 import glow_api.models  # noqa: F401
 from glow_api.settings import settings as glow_settings
 
 target_metadata = Base.metadata
 
 db_url = glow_settings.database_url
+connect_args: dict = {}
 if db_url:
-    if db_url.startswith("postgres://"):
-        db_url = db_url.replace("postgres://", "postgresql+asyncpg://", 1)
-    elif db_url.startswith("postgresql://"):
-        db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    db_url, connect_args = prepare_asyncpg_url(db_url)
     config.set_main_option("sqlalchemy.url", db_url)
 
 
@@ -84,6 +82,7 @@ async def run_async_migrations() -> None:
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args=connect_args,
     )
 
     async with connectable.connect() as connection:

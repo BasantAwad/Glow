@@ -60,7 +60,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(_: FastAPI):
         db_manager.initialize()
         await db_manager.configure_sqlite()
-        await _ensure_tables()
+        try:
+            await _ensure_tables()
+        except Exception as exc:  # noqa: BLE001
+            # Never let a transient database problem crash the whole
+            # serverless function. The app still boots and /healthz responds;
+            # individual DB-backed endpoints surface their own errors.
+            logger.error("Database startup check failed: %s", exc)
         yield
         await db_manager.close()
 
