@@ -34,3 +34,5 @@ glow.db
 test-runtime/
 glow_e2e_token.txt
 tts_test.wav
+.vercel
+.env*

@@ -1,8 +1,18 @@
 """FastAPI application factory for Glow's non-sensitive baseline."""
 
 import logging
+import sys
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
+
+# Vercel's Python runtime loads this file directly by path (e.g.
+# ``/var/task/src/glow_api/main.py``) without installing the package, so the
+# ``src`` directory is not on ``sys.path``. Add it before any ``glow_api.*``
+# imports so the app can resolve its own modules on serverless hosts.
+_SRC_DIR = str(Path(__file__).resolve().parent.parent)
+if _SRC_DIR not in sys.path:
+    sys.path.insert(0, _SRC_DIR)
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
