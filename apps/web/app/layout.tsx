@@ -56,6 +56,7 @@ export default function RootLayout({
           </div>
           <PageFooter />
           <CrisisBar />
+          <Analytics />
         </LanguageProvider>
         <Analytics />
       </body>
