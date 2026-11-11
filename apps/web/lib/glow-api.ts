@@ -79,6 +79,18 @@ function getStoredCredentialAuth(): TokenState {
   };
 }
 
+function clearAuth(): void {
+  state.token = null;
+  state.userId = null;
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(AUTH_USER_KEY);
+  sessionStorage.removeItem(AUTH_TOKEN_KEY);
+  sessionStorage.removeItem(AUTH_USER_KEY);
+}
+
 /** Convert an API failure into a short message suitable for the UI. */
 export function getApiErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof GlowApiOfflineError) {
@@ -99,8 +111,10 @@ async function throwApiError(response: Response, fallback: string): Promise<neve
   const code = typeof payload.code === "string" ? payload.code : null;
   const detail = typeof payload.detail === "string" ? payload.detail : null;
   let message = fallback;
-  if (response.status === 401) message = "Your session has expired. Please sign in again.";
-  else if (response.status === 403) message = "This action is not available for your account yet.";
+  if (response.status === 401) {
+    clearAuth();
+    message = "Your session has expired. Please sign in again.";
+  } else if (response.status === 403) message = "This action is not available for your account yet.";
   else if (response.status === 409) message = "That action is already in progress. Please try again.";
   else if (response.status === 422) message = "Please check the information and try again.";
   else if (response.status === 503) message = "Glow's support service is temporarily unavailable. Please try again shortly.";
