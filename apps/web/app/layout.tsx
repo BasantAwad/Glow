@@ -5,6 +5,7 @@ import { LanguageProvider } from "../contexts/LanguageContext";
 import { TopNav } from "../components/TopNav";
 import { PageFooter } from "../components/PageFooter";
 import { CrisisBar } from "../components/CrisisBar";
+import { Analytics } from "@vercel/analytics/next";
 
 const fontSans = Nunito_Sans({
   subsets: ["latin"],
@@ -56,6 +57,7 @@ export default function RootLayout({
           <PageFooter />
           <CrisisBar />
         </LanguageProvider>
+        <Analytics />
       </body>
     </html>
   );
