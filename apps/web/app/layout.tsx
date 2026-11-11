@@ -58,7 +58,6 @@ export default function RootLayout({
           <CrisisBar />
           <Analytics />
         </LanguageProvider>
-        <Analytics />
       </body>
     </html>
   );
