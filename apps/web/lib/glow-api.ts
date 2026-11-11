@@ -129,14 +129,14 @@ async function throwApiError(response: Response, fallback: string): Promise<neve
  * bootstrap endpoint only when no credential session is present.
  */
 export async function ensureSession(): Promise<{ token: string; userId: string }> {
-  if (state.token && state.userId) return { token: state.token, userId: state.userId };
-
   const cred = getStoredCredentialAuth();
   if (cred.token && cred.userId) {
     state.token = cred.token;
     state.userId = cred.userId;
     return { token: cred.token, userId: cred.userId };
   }
+
+  if (state.token && state.userId) return { token: state.token, userId: state.userId };
 
   const savedToken = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
   const savedUser = typeof window !== "undefined" ? localStorage.getItem(USER_KEY) : null;
